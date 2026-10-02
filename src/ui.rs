@@ -18,7 +18,7 @@ pub mod video;
 #[cfg(all(feature = "gui", not(target_os = "android")))]
 pub mod vru;
 
-pub const APP_ID: &str = "io.github.gopher64.gopher64";
+pub const APP_ID: &str = "io.github.abarbarich.vibe64";
 
 pub fn install_default_crypto_provider() {
     if rustls::crypto::CryptoProvider::get_default().is_none() {
@@ -194,9 +194,9 @@ pub fn get_dirs() -> Dirs {
             }
         } else {
             Dirs {
-                config_dir: dirs::config_dir().unwrap().join("gopher64"),
-                data_dir: dirs::data_dir().unwrap().join("gopher64"),
-                cache_dir: dirs::cache_dir().unwrap().join("gopher64"),
+                config_dir: dirs::config_dir().unwrap().join("vibe64"),
+                data_dir: dirs::data_dir().unwrap().join("vibe64"),
+                cache_dir: dirs::cache_dir().unwrap().join("vibe64"),
             }
         }
     }

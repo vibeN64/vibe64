@@ -1,0 +1,260 @@
+// Vibe64 look and feel: colours and the handful of custom controls every page shares.
+// SPDX-License-Identifier: GPL-3.0-or-later
+
+import { Palette } from "std-widgets.slint";
+
+export global Theme {
+    out property <bool> dark: Palette.color-scheme == ColorScheme.dark;
+
+    out property <color> accent: #8b5cf6;
+    out property <brush> accent-gradient: @linear-gradient(115deg, #7c3aed 0%, #db2777 100%);
+    out property <brush> hero-gradient: @linear-gradient(115deg, #6d28d9 0%, #db2777 60%, #f97316 100%);
+
+    out property <color> page-background: dark ? #15131c : #f5f4fa;
+    out property <color> sidebar-background: dark ? #0e0d13 : #e9e7f2;
+    out property <color> card-background: dark ? #201e2b : #ffffff;
+    out property <color> card-border: dark ? #312e40 : #e3e0ee;
+    out property <color> control-background: dark ? #2c293a : #efedf6;
+    out property <color> separator: dark ? #2b2838 : #eceaf4;
+
+    out property <color> text: dark ? #f2f0f8 : #1b1926;
+    out property <color> text-muted: dark ? #a29eb8 : #6c6883;
+
+    out property <length> radius: 12px;
+}
+
+// Push button. "primary" is for the one main action on a page.
+export component VButton inherits Rectangle {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in property <bool> primary;
+    in property <bool> large;
+    callback clicked;
+
+    min-height: root.large ? 46px : 36px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    border-radius: root.large ? 12px : 10px;
+    background: root.primary ? Theme.accent-gradient : Theme.control-background;
+    border-width: root.primary ? 0px : 1px;
+    border-color: Theme.card-border;
+    opacity: root.enabled ? 1 : 0.45;
+
+    accessible-role: button;
+    accessible-label: root.text;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        if (root.enabled) {
+            root.clicked();
+        }
+    }
+
+    HorizontalLayout {
+        padding-left: root.large ? 22px : 16px;
+        padding-right: root.large ? 22px : 16px;
+        alignment: center;
+
+        Text {
+            text: root.text;
+            color: root.primary ? white : Theme.text;
+            font-size: root.large ? 15px : 13px;
+            font-weight: 600;
+            vertical-alignment: center;
+            horizontal-alignment: center;
+        }
+    }
+
+    // darkens or lightens the button under the pointer
+    feedback := Rectangle {
+        border-radius: parent.border-radius;
+        background: Theme.dark || root.primary ? white : black;
+        opacity: 0;
+
+        animate opacity { duration: 120ms; }
+    }
+
+    touch := TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.clicked();
+        }
+    }
+
+    states [
+        pressed when touch.pressed: {
+            feedback.opacity: 0.18;
+        }
+        hover when touch.has-hover: {
+            feedback.opacity: 0.09;
+        }
+    ]
+}
+
+// On/off switch. With "text" it carries its own label, without it is just the toggle.
+export component VSwitch {
+    in property <string> text;
+    in property <bool> enabled: true;
+    in-out property <bool> checked;
+    callback toggled;
+
+    min-height: 26px;
+    horizontal-stretch: 0;
+    vertical-stretch: 0;
+    opacity: root.enabled ? 1 : 0.45;
+
+    accessible-role: switch;
+    accessible-label: root.text;
+    accessible-checkable: true;
+    accessible-checked: root.checked;
+    accessible-enabled: root.enabled;
+    accessible-action-default => {
+        if (root.enabled) {
+            root.checked = !root.checked;
+            root.toggled();
+        }
+    }
+
+    HorizontalLayout {
+        spacing: 10px;
+
+        VerticalLayout {
+            alignment: center;
+
+            track := Rectangle {
+                width: 42px;
+                height: 24px;
+                border-radius: 12px;
+                background: root.checked ? Theme.accent : Theme.control-background;
+                border-width: root.checked ? 0px : 1px;
+                border-color: Theme.card-border;
+
+                animate background { duration: 140ms; }
+
+                Rectangle {
+                    x: root.checked ? parent.width - self.width - 3px : 3px;
+                    y: 3px;
+                    width: 18px;
+                    height: 18px;
+                    border-radius: 9px;
+                    background: root.checked ? white : Theme.text-muted;
+
+                    animate x {
+                        duration: 140ms;
+                        easing: ease-out;
+                    }
+                }
+            }
+        }
+
+        if root.text != "": Text {
+            text: root.text;
+            color: Theme.text;
+            vertical-alignment: center;
+        }
+    }
+
+    TouchArea {
+        enabled: root.enabled;
+        mouse-cursor: pointer;
+        clicked => {
+            root.checked = !root.checked;
+            root.toggled();
+        }
+    }
+}
+
+// Rounded panel that groups related controls, with an optional heading.
+export component Card inherits Rectangle {
+    in property <string> title;
+    in property <string> description;
+
+    background: Theme.card-background;
+    border-radius: Theme.radius;
+    border-width: 1px;
+    border-color: Theme.card-border;
+    vertical-stretch: 0;
+
+    VerticalLayout {
+        padding: 16px;
+        spacing: 10px;
+
+        if root.title != "": Text {
+            text: root.title;
+            color: Theme.text;
+            font-size: 15px;
+            font-weight: 700;
+        }
+        if root.description != "": Text {
+            text: root.description;
+            color: Theme.text-muted;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+
+        @children
+    }
+}
+
+// One line in a settings card: what it is on the left, the control on the right.
+export component SettingRow inherits Rectangle {
+    in property <string> label;
+    in property <string> hint;
+    in property <bool> divider: true;
+
+    min-height: 44px;
+    vertical-stretch: 0;
+
+    if root.divider: Rectangle {
+        y: 0;
+        height: 1px;
+        background: Theme.separator;
+    }
+
+    HorizontalLayout {
+        padding-top: 8px;
+        padding-bottom: 8px;
+        spacing: 16px;
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 1;
+            spacing: 2px;
+
+            Text {
+                text: root.label;
+                color: Theme.text;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
+
+            if root.hint != "": Text {
+                text: root.hint;
+                color: Theme.text-muted;
+                font-size: 11px;
+                wrap: word-wrap;
+            }
+        }
+
+        VerticalLayout {
+            alignment: center;
+            horizontal-stretch: 0;
+
+            @children
+        }
+    }
+}
+
+// Small caption above a field
+export component FieldLabel inherits Text {
+    color: Theme.text-muted;
+    font-size: 11px;
+    font-weight: 600;
+}
+
+// A row of buttons, kept to their natural width and aligned left
+export component ButtonRow inherits HorizontalLayout {
+    spacing: 10px;
+    alignment: start;
+    vertical-stretch: 0;
+}

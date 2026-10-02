@@ -1,93 +1,99 @@
-# gopher64
-Gopher64 is a cross-platform N64 emulator. Some notable features:
-* Netplay
-* Homebrew support
-* Upscaling
-* CRT shader
-* Emulate CPU overclocking
-* Cheats
-* Savestates
-* RetroAchievements
+# Vibe64
+
+Vibe64 is an N64 emulator. It is a fork of [Gopher64](https://github.com/gopher64/gopher64) by Logan McNaughton and the Gopher64 contributors, and the emulation is their work.
+
+The fork exists for one reason: Gopher64 does not accept AI-assisted contributions, and Vibe64 does.
+
+Vibe64 is not affiliated with or endorsed by the Gopher64 project.
+
+- Please report Vibe64 problems [here](https://github.com/abarbarich/vibe64/issues), not upstream.
+- Please do not send Vibe64 changes to Gopher64 as pull requests. Their policy forbids it.
+
+## what is different from Gopher64
+
+- A redesigned interface: themed cards, buttons and switches in place of the stock widgets.
+- Its own name, icon, app identifier and data folders, so it can sit beside a Gopher64 install without sharing settings or saves.
+- No donation prompts in the app.
+- Builds with a stock Xcode toolchain on macOS (no separate LLVM install), and `scripts/bundle-macos.sh` assembles `Vibe64.app`.
+
+Everything else follows upstream: netplay, homebrew support, upscaling, the CRT shader, CPU overclocking, cheats, savestates and RetroAchievements.
+
+## things that still point at Gopher64
+
+These have not been separated yet, so be aware of them:
+
+- **Netplay** uses the Gopher64 project's netplay server and community channels.
+- **Discord Rich Presence** shows up under Gopher64's Discord application.
+- **Documentation** links go to the [Gopher64 wiki](https://github.com/gopher64/gopher64/wiki), which still describes the controls and netplay accurately.
+- The Android project is unchanged from upstream and is not maintained here.
 
 ## download
 
-<a href="https://loganmc10.itch.io/gopher64"><img src="https://static.itch.io/images/badge.svg" width="200" ></a>
-
-Windows:
-* Standalone executable: [gopher64-windows-x86_64.exe](https://github.com/gopher64/gopher64/releases/latest/download/gopher64-windows-x86_64.exe)
-
-MacOS:
-* App Bundle: [gopher64-macos-aarch64.zip](https://github.com/gopher64/gopher64/releases/latest/download/gopher64-macos-aarch64.zip)
-* Homebrew: `brew install --cask gopher64`
-
-Linux:
-* Standalone executable: [gopher64-linux-x86_64](https://github.com/gopher64/gopher64/releases/latest/download/gopher64-linux-x86_64)
-* Flatpak: `flatpak install flathub io.github.gopher64.gopher64`
-
-Android:
-* APK: [gopher64-android.apk](https://github.com/gopher64/gopher64/releases/latest/download/gopher64-android.apk)
-
-## wiki
-
-https://github.com/gopher64/gopher64/wiki
-
-## discord
-
-[Discord invite link](https://discord.gg/9RGXq8W8JQ)
+There are no pre-built releases yet. Build from source as described below.
 
 ## controls
 
 Keys are mapped according to [these defaults](https://github.com/gopher64/gopher64/wiki/Default-Keyboard-Setup). Xbox-style controllers also have a [default mapping applied](https://github.com/gopher64/gopher64/wiki/Default-Gamepad-Setup).
 
-## netplay
-
-Gopher64 supports P2P netplay (online play with others).
-
-Please read the [guide](https://github.com/gopher64/gopher64/wiki/Netplay-Guide) before trying out netplay.
-
 ## portable mode
 
-If you would like to keep all the game data in the same folder as the executable, you just need to create a file called "portable.txt" in the same directory as the executable.
-
-## flatpak
-
-If you want to run the flatpak from the command line, you need to add the `--filesystem=host:ro` option, for example:
-
-```
-flatpak run --filesystem=host:ro io.github.gopher64.gopher64 /path/to/rom.z64
-```
+If you would like to keep all the game data in the same folder as the executable, create a file called "portable.txt" in the same directory as the executable.
 
 ## building and usage
 
 1. [Install dependencies](#build-dependencies)
 2. [Install rust](https://www.rust-lang.org/tools/install)
-3. `git clone --recursive https://github.com/gopher64/gopher64.git`
-4. `cd gopher64`
+3. `git clone --recursive https://github.com/abarbarich/vibe64.git`
+4. `cd vibe64`
 5. `git submodule update --init --recursive`
 6. `cargo build --release`
-7. `./target/release/gopher64 /path/to/rom.z64`
+7. `./target/release/vibe64 /path/to/rom.z64`
+
+### macOS app bundle
+
+```
+brew install molten-vk
+./scripts/bundle-macos.sh
+open target/Vibe64.app
+```
+
+The script finds `llvm-ar` inside the Rust toolchain, so nothing beyond Xcode's command line tools and Rust is needed to compile. When building by hand with plain `cargo build`, set `AR` to that `llvm-ar` yourself; the script shows how.
 
 ### build dependencies
-####  Ubuntu 25
+#### Ubuntu 25
 1. [Install the SDL3 dependencies](https://wiki.libsdl.org/SDL3/README-linux#build-dependencies)
 2. ```
     sudo apt install clang llvm
     ```
 
+### working on the interface
+
+Set `VIBE64_PAGE` to open straight onto a sidebar page, counting from 0. For example `VIBE64_PAGE=5 ./target/release/vibe64` opens Settings.
+
+## keeping up with Gopher64
+
+Upstream fixes are merged in one direction only:
+
+```
+git remote add upstream https://github.com/gopher64/gopher64.git
+git fetch upstream
+git merge upstream/main
+```
+
 ## contributing
 
-PRs that are vibe coded and/or co-authored by AI agents (Plan/Agent mode) are not permitted. If you are going to submit a PR, it should be scoped to a single feature/improvement.
+AI-assisted and "vibe coded" pull requests are welcome. So are entirely hand-written ones.
 
-Please contact me via a GitHub issue or Discord (loganmc10) before doing substantial work on a PR.
+- Say in the PR which tools you used, and what you tested and how.
+- You are responsible for what you submit, however it was written. Run it before you send it.
+- Keep each PR to one feature or fix.
 
 ## license
 
-Gopher64 is licensed under the GPLv3 license. Many portions of gopher64 have been adapted from mupen64plus and/or ares. The license for mupen64plus can be found [here](https://github.com/mupen64plus/mupen64plus-core/blob/master/LICENSES). The license for ares can be found [here](https://github.com/ares-emulator/ares/blob/master/LICENSE).
+Vibe64 is licensed under the GPLv3 license, the same as Gopher64. Many portions of Gopher64 have been adapted from mupen64plus and/or ares. The license for mupen64plus can be found [here](https://github.com/mupen64plus/mupen64plus-core/blob/master/LICENSES). The license for ares can be found [here](https://github.com/ares-emulator/ares/blob/master/LICENSE).
 
-## privacy and code signing policy
+## privacy
 
-Free code signing for the Windows release is provided by [SignPath.io](https://about.signpath.io), certificate by [SignPath Foundation](https://signpath.org).
-
-During online netplay sessions, the server logs your IP address and basic session information (game title and session name) for operational purposes. No additional personal data is collected or stored.
+During online netplay sessions, the Gopher64 netplay server logs your IP address and basic session information (game title and session name) for operational purposes.
 
 If you enable the RetroAchievements feature, some data is sent to their systems. Please see their terms [here](https://retroachievements.org/terms).

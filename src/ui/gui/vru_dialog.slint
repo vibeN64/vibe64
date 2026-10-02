@@ -1,4 +1,5 @@
-import { Button, VerticalBox, ScrollView } from "std-widgets.slint";
+import { VerticalBox, ScrollView } from "std-widgets.slint";
+import { VButton as Button, Theme } from "theme.slint";
 export global VruData {
     in-out property <[string]> words;
 }
@@ -7,6 +8,7 @@ export component VruDialog inherits Window {
     title: @tr("What Would You Like To Say?");
     preferred-width: 400px;
     preferred-height: 400px;
+    background: Theme.page-background;
     callback vru_button_clicked(string);
     in-out property words <=> VruData.words;
 

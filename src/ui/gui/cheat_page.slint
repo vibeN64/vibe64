@@ -1,15 +1,8 @@
 // Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: MIT
 
-import {
-    ListView,
-    HorizontalBox,
-    VerticalBox,
-    Button,
-    GroupBox,
-    Switch,
-    CheckBox,
-} from "std-widgets.slint";
+import { CheckBox } from "std-widgets.slint";
+import { Theme, VButton, VSwitch, Card, ButtonRow } from "theme.slint";
 import { Page } from "page.slint";
 import { SettingsData } from "settings_page.slint";
 
@@ -30,70 +23,79 @@ export component Cheats inherits Page {
     callback cheats_clear_clicked;
     callback cheat_toggled(string, string, string, bool);
 
-    VerticalBox {
-        alignment: start;
-        HorizontalBox {
-            alignment: start;
-            if CheatsData.cheat_game_name == "": Button {
-                text: @tr("Select ROM");
-                clicked => {
-                    cheats_select_rom_clicked(SettingsData.rom_dir);
-                }
-            }
-            if CheatsData.cheat_game_name != "": Button {
-                text: CheatsData.cheat_game_name;
-                clicked => {
-                    cheats_select_rom_clicked(SettingsData.rom_dir);
-                }
-            }
-            Rectangle {
-                width: 20px;
-            }
-
-            Button {
-                text: @tr("Clear Cheats For All ROMs");
-                clicked => {
-                    cheats_clear_clicked();
-                }
+    ButtonRow {
+        VButton {
+            text: CheatsData.cheat_game_name == "" ? @tr("Select ROM") : CheatsData.cheat_game_name;
+            primary: true;
+            clicked => {
+                cheats_select_rom_clicked(SettingsData.rom_dir);
             }
         }
 
-        Rectangle { }
+        VButton {
+            text: @tr("Clear Cheats For All ROMs");
+            clicked => {
+                cheats_clear_clicked();
+            }
+        }
+    }
 
-        for data in CheatsData.cheats: VerticalBox {
-            height: self.min-height;
+    if CheatsData.cheat_game_name == "": Card {
+        Text {
+            text: @tr("Select a ROM to see the cheats available for it.");
+            color: Theme.text-muted;
+            font-size: 13px;
+            wrap: word-wrap;
+        }
+    }
+
+    for data in CheatsData.cheats: Card {
+        HorizontalLayout {
+            spacing: 12px;
+
             Text {
                 text: data.cheat_name;
-                font-size: 16px;
+                color: Theme.text;
+                font-size: 14px;
+                font-weight: 600;
                 wrap: word-wrap;
+                vertical-alignment: center;
+                horizontal-stretch: 1;
             }
 
-            if data.notes != "":Text {
-                text: data.notes;
-                wrap: word-wrap;
-            }
-
-            if data.options.length == 0: Switch {
+            if data.options.length == 0: VSwitch {
                 checked: data.enabled;
                 toggled => {
                     data.enabled = self.checked;
                     cheat_toggled(CheatsData.cheat_game_crc,data.cheat_name,"",self.checked);
                 }
             }
-            for item in data.options: CheckBox {
-                text: item.option;
-                enabled: !data.enabled || (data.enabled && item.enabled);
-                checked: item.enabled;
-                toggled => {
-                    item.enabled = self.checked;
-                    data.enabled = self.checked;
-                    cheat_toggled(CheatsData.cheat_game_crc,data.cheat_name,item.option,self.checked);
-                }
-            }
         }
 
-        if CheatsData.cheats.length == 0 && CheatsData.cheat_game_name != "": Text {
+        if data.notes != "": Text {
+            text: data.notes;
+            color: Theme.text-muted;
+            font-size: 12px;
+            wrap: word-wrap;
+        }
+
+        for item in data.options: CheckBox {
+            text: item.option;
+            enabled: !data.enabled || (data.enabled && item.enabled);
+            checked: item.enabled;
+            toggled => {
+                item.enabled = self.checked;
+                data.enabled = self.checked;
+                cheat_toggled(CheatsData.cheat_game_crc,data.cheat_name,item.option,self.checked);
+            }
+        }
+    }
+
+    if CheatsData.cheats.length == 0 && CheatsData.cheat_game_name != "": Card {
+        Text {
             text: @tr("No Cheats Available");
+            color: Theme.text-muted;
+            font-size: 13px;
         }
     }
 }

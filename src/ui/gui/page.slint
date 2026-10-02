@@ -1,32 +1,53 @@
 // Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: MIT
 
-import { ScrollView, HorizontalBox, VerticalBox } from "std-widgets.slint";
+import { ScrollView } from "std-widgets.slint";
+import { Theme } from "theme.slint";
 
-export component Page inherits VerticalBox {
+export component Page inherits Rectangle {
     in property <string> title: "title";
+    in property <string> subtitle;
 
+    background: Theme.page-background;
     accessible-role: tab-panel;
     accessible-label: root.title;
 
-    HorizontalBox {
-        Text {
-            font-size: 20px;
-            text <=> root.title;
+    VerticalLayout {
+        padding-top: 22px;
+        padding-left: 26px;
+        spacing: 14px;
+
+        VerticalLayout {
+            padding-right: 26px;
+            spacing: 3px;
+
+            Text {
+                text: root.title;
+                color: Theme.text;
+                font-size: 24px;
+                font-weight: 700;
+            }
+
+            if root.subtitle != "": Text {
+                text: root.subtitle;
+                color: Theme.text-muted;
+                font-size: 13px;
+                wrap: word-wrap;
+            }
         }
 
-        Rectangle { }
-    }
+        ScrollView {
+            mouse-drag-pan-enabled: true;
+            vertical-stretch: 1;
 
-    ScrollView {
-        mouse-drag-pan-enabled: true;
-        vertical-stretch: 1;
+            VerticalLayout {
+                padding-right: 26px;
+                padding-bottom: 26px;
+                spacing: 14px;
+                alignment: start;
 
-        VerticalBox {
-            padding: 8px;
-            alignment: start;
-
-            @children
+                @children
+            }
         }
     }
 }

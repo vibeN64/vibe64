@@ -1,14 +1,8 @@
 // Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: MIT
 
-import {
-    StandardButton,
-    VerticalBox,
-    HorizontalBox,
-    Button,
-    LineEdit,
-} from "std-widgets.slint";
 import { Page } from "page.slint";
+import { Theme, VButton, Card, ButtonRow } from "theme.slint";
 import { State } from "localgame_page.slint";
 
 export global NetplayData {
@@ -36,44 +30,45 @@ export component Netplay inherits Page {
     callback netplay_feedback_button_clicked;
     title: @tr("Netplay");
 
-    VerticalBox {
-        alignment: start;
-        HorizontalBox {
-            alignment: center;
-            Button {
+    Card {
+        title: @tr("Play online");
+        description: @tr("Host a session for friends to join, or join one that is already running.");
+
+        ButtonRow {
+            VButton {
                 enabled: !State.game_running;
+                primary: true;
+                large: true;
                 text: @tr("Create Session");
                 clicked => {
                     create_session_button_clicked();
                 }
             }
-        }
 
-        HorizontalBox {
-            alignment: center;
-            Button {
+            VButton {
                 enabled: !State.game_running;
+                large: true;
                 text: @tr("Join Session");
                 clicked => {
                     join_session_button_clicked();
                 }
             }
         }
+    }
 
-        Rectangle {
-            height: 20px;
-        }
+    Card {
+        title: @tr("Community");
+        description: @tr("Netplay runs on the Gopher64 project's servers and community channels.");
 
-        HorizontalBox {
-            alignment: center;
-            Button {
+        ButtonRow {
+            VButton {
                 text: @tr("Netplay Discord Channel");
                 clicked => {
                     netplay_discord_button_clicked();
                 }
             }
 
-            Button {
+            VButton {
                 text: @tr("Provide Feedback");
                 clicked => {
                     netplay_feedback_button_clicked();

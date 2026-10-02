@@ -1,8 +1,8 @@
 // Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: MIT
 
-import { Button, HorizontalBox, VerticalBox } from "std-widgets.slint";
 import { Page } from "page.slint";
+import { Theme, VButton, Card, ButtonRow } from "theme.slint";
 
 export global AboutData {
     in property <string> version;
@@ -11,9 +11,8 @@ export global AboutData {
 
 export component NewVersionButton {
     callback newversion_button_clicked;
-    HorizontalBox {
-        alignment: center;
-        Button {
+    ButtonRow {
+        VButton {
             text: @tr("New version available! Click here to download");
             primary: true;
             clicked => {
@@ -27,72 +26,47 @@ export component About inherits Page {
     callback wiki_button_clicked;
     callback discord_button_clicked;
     callback newversion_button_clicked;
-    callback patreon_button_clicked;
-    callback github_sponsors_button_clicked;
     callback source_code_button_clicked;
     title: @tr("About");
 
-    VerticalBox {
-        alignment: start;
-        HorizontalBox {
-            alignment: center;
-            Button {
-                text: @tr("Wiki");
+    Card {
+        title: "Vibe64";
+        description: AboutData.version;
+
+        Text {
+            text: @tr("Vibe64 is a fork of Gopher64 that welcomes AI-assisted contributions. The emulation itself is the work of Logan McNaughton and the Gopher64 contributors. Vibe64 is not affiliated with or endorsed by them, so please report problems here and not upstream.");
+            color: Theme.text;
+            font-size: 13px;
+            wrap: word-wrap;
+        }
+
+        ButtonRow {
+            VButton {
+                text: @tr("Source Code");
+                clicked => {
+                    source_code_button_clicked();
+                }
+            }
+
+            VButton {
+                text: @tr("Report a Problem");
+                clicked => {
+                    discord_button_clicked();
+                }
+            }
+
+            VButton {
+                text: @tr("Gopher64 Wiki");
                 clicked => {
                     wiki_button_clicked();
                 }
             }
         }
 
-        HorizontalBox {
-            alignment: center;
-            Button {
-                text: @tr("Discord Server");
-                clicked => {
-                    discord_button_clicked();
-                }
-            }
-        }
-
-        HorizontalBox {
-            alignment: center;
-            Button {
-                text: @tr("Source Code");
-                clicked => {
-                    source_code_button_clicked();
-                }
-            }
-        }
-
-        HorizontalBox {
-            alignment: center;
-            Button {
-                text: @tr("Donate (via Patreon)");
-                clicked => {
-                    patreon_button_clicked();
-                }
-            }
-
-            Button {
-                text: @tr("Donate (via GitHub)");
-                clicked => {
-                    github_sponsors_button_clicked();
-                }
-            }
-        }
-
-        HorizontalBox {
-            alignment: center;
-            Text {
-                text: AboutData.version;
-            }
-        }
-
-        if AboutData.has_update:NewVersionButton {
+        if AboutData.has_update: NewVersionButton {
             newversion_button_clicked => {
                 newversion_button_clicked();
             }
         }
-        Rectangle { }
     }
 }

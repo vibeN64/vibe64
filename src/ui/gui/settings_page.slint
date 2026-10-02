@@ -1,14 +1,9 @@
 // Copyright © SixtyFPS GmbH <info@slint.dev>
 // SPDX-License-Identifier: MIT
 
-import {
-    GroupBox,
-    ComboBox,
-    HorizontalBox,
-    VerticalBox,
-    Switch,
-} from "std-widgets.slint";
+import { ComboBox } from "std-widgets.slint";
 import { Page } from "page.slint";
+import { Card, SettingRow, VSwitch } from "theme.slint";
 
 export global SettingsData {
     in-out property <bool> integer_scaling;
@@ -30,149 +25,173 @@ export global SettingsData {
 export component Settings inherits Page {
     title: @tr("Settings");
 
-    HorizontalBox {
-        alignment: center;
-        VerticalBox {
-            alignment: start;
-            GroupBox {
-                title: @tr("Game");
-                VerticalBox {
-                    alignment: start;
-                    HorizontalBox {
-                        alignment: start;
-                        Text {
-                            text: @tr("Resolution:");
-                            vertical-alignment: center;
-                        }
+    Card {
+        title: @tr("Video");
 
-                        ComboBox {
-                            model: ["1x", "2x", "4x", "8x"];
-                            current-index: SettingsData.resolution;
-                            selected => {
-                                SettingsData.resolution = self.current-index;
-                            }
-                        }
-                    }
+        SettingRow {
+            label: @tr("Resolution:");
+            hint: @tr("Internal rendering resolution, as a multiple of the original.");
+            divider: false;
 
-                    Switch {
-                        text: @tr("SSAA downscaling");
-                        checked: SettingsData.ssaa;
-                        toggled => {
-                            SettingsData.ssaa = self.checked;
-                        }
-                    }
-
-                    Switch {
-                        text: @tr("Integer Scaling");
-                        checked: SettingsData.integer_scaling;
-                        toggled => {
-                            SettingsData.integer_scaling = self.checked;
-                        }
-                    }
-
-                    Switch {
-                        text: @tr("Fullscreen");
-                        checked: SettingsData.fullscreen;
-                        toggled => {
-                            SettingsData.fullscreen = self.checked;
-                        }
-                    }
-
-                    Switch {
-                        text: @tr("Widescreen (stretch)");
-                        checked: SettingsData.widescreen;
-                        toggled => {
-                            SettingsData.widescreen = self.checked;
-                        }
-                    }
-
-                    Switch {
-                        text: @tr("VSync");
-                        checked: SettingsData.vsync;
-                        toggled => {
-                            SettingsData.vsync = self.checked;
-                        }
-                    }
-
-                    Switch {
-                        text: @tr("Apply CRT shader");
-                        checked: SettingsData.apply_crt_shader;
-                        toggled => {
-                            SettingsData.apply_crt_shader = self.checked;
-                        }
-                    }
-
-                    Rectangle {
-                        height: 20px;
-                    }
-
-                    Switch {
-                        text: @tr("Overclock N64 CPU (may cause bugs)");
-                        checked: SettingsData.overclock_n64_cpu;
-                        toggled => {
-                            SettingsData.overclock_n64_cpu = self.checked;
-                        }
-                    }
-
-                    Switch {
-                        text: @tr("Disable Expansion Pak");
-                        checked: SettingsData.disable_expansion_pak;
-                        toggled => {
-                            SettingsData.disable_expansion_pak = self.checked;
-                        }
-                    }
-
-                    Switch {
-                        text: @tr("Enable Rewind");
-                        checked: SettingsData.rewind;
-                        toggled => {
-                            SettingsData.rewind = self.checked;
-                        }
-                    }
-
-                    Switch {
-                        text: @tr("Emulate UNFLoader");
-                        checked: SettingsData.emulate_usb;
-                        toggled => {
-                            SettingsData.emulate_usb = self.checked;
-                        }
-                    }
-
-                    Switch {
-                        text: @tr("Emulate VRU");
-                        checked: SettingsData.emulate_vru;
-                        toggled => {
-                            SettingsData.emulate_vru = self.checked;
-                        }
-                    }
-                }
-            }
-
-            GroupBox {
-                title: @tr("UI");
-                VerticalBox {
-                    alignment: start;
-                    HorizontalBox {
-                        alignment: start;
-                        Text {
-                            text: @tr("Theme:");
-                            vertical-alignment: center;
-                        }
-
-                        ComboBox {
-                            model: [@tr("System"), @tr("Dark"), @tr("Light")];
-                            current-index: SettingsData.theme;
-                            selected => {
-                                SettingsData.theme = self.current-index;
-                            }
-                        }
-                    }
-
-                    Rectangle {
-                        height: 40px; // so the combobox isn't cut off
-                    }
+            ComboBox {
+                model: ["1x", "2x", "4x", "8x"];
+                current-index: SettingsData.resolution;
+                selected => {
+                    SettingsData.resolution = self.current-index;
                 }
             }
         }
+
+        SettingRow {
+            label: @tr("SSAA downscaling");
+            hint: @tr("Render at the higher resolution, then scale down for smoother edges.");
+
+            VSwitch {
+                checked: SettingsData.ssaa;
+                toggled => {
+                    SettingsData.ssaa = self.checked;
+                }
+            }
+        }
+
+        SettingRow {
+            label: @tr("Integer Scaling");
+            hint: @tr("Only scale the picture by whole numbers.");
+
+            VSwitch {
+                checked: SettingsData.integer_scaling;
+                toggled => {
+                    SettingsData.integer_scaling = self.checked;
+                }
+            }
+        }
+
+        SettingRow {
+            label: @tr("Fullscreen");
+
+            VSwitch {
+                checked: SettingsData.fullscreen;
+                toggled => {
+                    SettingsData.fullscreen = self.checked;
+                }
+            }
+        }
+
+        SettingRow {
+            label: @tr("Widescreen (stretch)");
+
+            VSwitch {
+                checked: SettingsData.widescreen;
+                toggled => {
+                    SettingsData.widescreen = self.checked;
+                }
+            }
+        }
+
+        SettingRow {
+            label: @tr("VSync");
+
+            VSwitch {
+                checked: SettingsData.vsync;
+                toggled => {
+                    SettingsData.vsync = self.checked;
+                }
+            }
+        }
+
+        SettingRow {
+            label: @tr("Apply CRT shader");
+
+            VSwitch {
+                checked: SettingsData.apply_crt_shader;
+                toggled => {
+                    SettingsData.apply_crt_shader = self.checked;
+                }
+            }
+        }
+    }
+
+    Card {
+        title: @tr("Emulation");
+
+        SettingRow {
+            label: @tr("Overclock N64 CPU (may cause bugs)");
+            divider: false;
+
+            VSwitch {
+                checked: SettingsData.overclock_n64_cpu;
+                toggled => {
+                    SettingsData.overclock_n64_cpu = self.checked;
+                }
+            }
+        }
+
+        SettingRow {
+            label: @tr("Disable Expansion Pak");
+            hint: @tr("Run with 4 MB of memory instead of 8.");
+
+            VSwitch {
+                checked: SettingsData.disable_expansion_pak;
+                toggled => {
+                    SettingsData.disable_expansion_pak = self.checked;
+                }
+            }
+        }
+
+        SettingRow {
+            label: @tr("Enable Rewind");
+
+            VSwitch {
+                checked: SettingsData.rewind;
+                toggled => {
+                    SettingsData.rewind = self.checked;
+                }
+            }
+        }
+
+        SettingRow {
+            label: @tr("Emulate UNFLoader");
+            hint: @tr("USB debug link used by homebrew developers.");
+
+            VSwitch {
+                checked: SettingsData.emulate_usb;
+                toggled => {
+                    SettingsData.emulate_usb = self.checked;
+                }
+            }
+        }
+
+        SettingRow {
+            label: @tr("Emulate VRU");
+            hint: @tr("The Voice Recognition Unit microphone accessory.");
+
+            VSwitch {
+                checked: SettingsData.emulate_vru;
+                toggled => {
+                    SettingsData.emulate_vru = self.checked;
+                }
+            }
+        }
+    }
+
+    Card {
+        title: @tr("UI");
+
+        SettingRow {
+            label: @tr("Theme:");
+            divider: false;
+
+            ComboBox {
+                model: [@tr("System"), @tr("Dark"), @tr("Light")];
+                current-index: SettingsData.theme;
+                selected => {
+                    SettingsData.theme = self.current-index;
+                }
+            }
+        }
+    }
+
+    Rectangle {
+        height: 60px; // so the combobox popup isn't cut off
     }
 }
