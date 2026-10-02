@@ -492,9 +492,18 @@ pub fn get_joysticks() -> Vec<sdl3_sys::joystick::SDL_JoystickID> {
     let mut num_joysticks = 0;
     let sdl_joysticks = unsafe { sdl3_sys::joystick::SDL_GetJoysticks(&mut num_joysticks) };
     if !sdl_joysticks.is_null() {
-        let parts =
+        let mut parts =
             unsafe { std::slice::from_raw_parts(sdl_joysticks, num_joysticks as usize) }.to_vec();
         unsafe { sdl3_sys::stdinc::SDL_free(sdl_joysticks as *mut std::ffi::c_void) };
+        // macOS also offers the NSO N64 controller through its own GameController
+        // framework. SDL does not fold that copy into the real one, and it has no C
+        // buttons, so it is left out whenever the real one is there.
+        if parts
+            .iter()
+            .any(|joystick| ui::input_profile::is_nso_n64_controller(*joystick))
+        {
+            parts.retain(|joystick| !ui::input_profile::is_nso_n64_system_duplicate(*joystick));
+        }
         parts
     } else {
         eprintln!("Could not get joysticks");
