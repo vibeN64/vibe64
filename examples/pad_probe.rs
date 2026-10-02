@@ -1,10 +1,14 @@
 //! Prints what SDL reports for a connected gamepad: its name, IDs, mapping string, and
 //! every button press and large axis movement. Used to check input profiles against a
-//! real controller.
+//! real controller. With "rumble" after the seconds, every button press also shakes the
+//! pad for half a second, to check that SDL can drive its motor.
 //!
-//!     cargo run --release --example pad_probe -- [seconds]
+//!     cargo run --release --example pad_probe -- [seconds] [rumble]
 
 use std::ffi::CStr;
+
+// SDL needs the clang runtime that the emulator's build script links in
+use viben64 as _;
 
 fn c_str(ptr: *const std::ffi::c_char) -> String {
     if ptr.is_null() {
@@ -19,6 +23,7 @@ fn main() {
         .nth(1)
         .and_then(|arg| arg.parse().ok())
         .unwrap_or(45);
+    let rumble = std::env::args().nth(2).is_some_and(|arg| arg == "rumble");
 
     unsafe {
         sdl3_sys::everything::SDL_SetHint(
@@ -77,6 +82,21 @@ fn main() {
                         c_str(name),
                         button
                     );
+                    if rumble {
+                        let pad =
+                            unsafe { sdl3_sys::gamepad::SDL_GetGamepadFromID(event.gbutton.which) };
+                        let sent = unsafe {
+                            sdl3_sys::gamepad::SDL_RumbleGamepad(pad, u16::MAX, u16::MAX, 500)
+                        };
+                        println!(
+                            "       RUMBLE {}",
+                            if sent {
+                                "sent".to_string()
+                            } else {
+                                c_str(sdl3_sys::error::SDL_GetError())
+                            }
+                        );
+                    }
                 }
                 sdl3_sys::events::SDL_EVENT_GAMEPAD_AXIS_MOTION => {
                     let axis = unsafe { event.gaxis.axis } as usize;
@@ -113,6 +133,14 @@ fn main() {
         std::thread::sleep(std::time::Duration::from_millis(5));
     }
 
+    // let a pending rumble stop reach the pads before they are closed
+    for pad in &open {
+        unsafe { sdl3_sys::gamepad::SDL_RumbleGamepad(*pad, 0, 0, 0) };
+    }
+    unsafe {
+        sdl3_sys::timer::SDL_Delay(40);
+        sdl3_sys::joystick::SDL_UpdateJoysticks();
+    }
     for pad in open {
         unsafe { sdl3_sys::gamepad::SDL_CloseGamepad(pad) };
     }

@@ -155,7 +155,10 @@ static void add_joystick_event(void *userdata) {
 }
 
 bool sdl_event_filter(void *userdata, SDL_Event *event) {
-  if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+  // SDL_EVENT_QUIT is Cmd+Q, or a request to terminate: end the game the same way as
+  // closing its window, so that saves are written and controllers are released.
+  if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
+      event->type == SDL_EVENT_QUIT) {
     callback.paused = false;
     callback.emu_running = false;
   } else if (event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED &&
