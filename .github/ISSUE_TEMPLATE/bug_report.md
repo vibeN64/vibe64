@@ -25,9 +25,11 @@ A clear and concise description of what you expected to happen.
 If applicable, add screenshots to help explain your problem.
 
 **Device (please complete the following information):**
- - OS: [e.g. Windows 11]
- - CPU: [e.g. Intel i7-1365U]
- - GPU: [e.g. Nvidia 5060 Ti]
+ - Mac: [e.g. MacBook Air M2]
+ - macOS: [e.g. 15.5]
+ - VibeN64 version: [from the About page]
+
+VibeN64 only supports Apple Silicon Macs. If the problem also happens in Gopher64, say so, but please do not report VibeN64 problems to the Gopher64 project.
 
 **Additional context**
 Add any other context about the problem here.

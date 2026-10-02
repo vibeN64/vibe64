@@ -1,0 +1,62 @@
+name: CI
+
+# VibeN64 targets Apple Silicon Macs only, so that is the one platform built here.
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+    branches: ["main"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  build:
+    name: build (macOS, Apple Silicon)
+    runs-on: macos-15
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          submodules: recursive
+          fetch-depth: 0
+
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
+        with:
+          components: clippy, rustfmt, llvm-tools
+          # warnings are denied explicitly in the lint step instead of for every crate
+          rustflags: ""
+
+      - name: Install MoltenVK
+        run: brew install molten-vk
+
+      - name: Formatting
+        run: cargo fmt --check
+
+      - name: Build the app bundle
+        run: ./scripts/bundle-macos.sh
+
+      - name: Lint
+        run: |
+          TOOLCHAIN=$(sed -n 's/^channel = "\(.*\)"/\1/p' rust-toolchain.toml)
+          HOST=$(rustc -vV | sed -n 's/^host: //p')
+          export AR="$HOME/.rustup/toolchains/$TOOLCHAIN-$HOST/lib/rustlib/$HOST/bin/llvm-ar"
+          cargo clippy --release -- -Dwarnings
+
+      - name: Package
+        run: ditto -c -k --keepParent target/VibeN64.app VibeN64-macos-arm64.zip
+
+      - uses: actions/upload-artifact@v7
+        with:
+          name: VibeN64-macos-arm64
+          path: VibeN64-macos-arm64.zip
+          if-no-files-found: error
+          retention-days: 14
