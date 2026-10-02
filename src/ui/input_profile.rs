@@ -941,7 +941,9 @@ pub fn is_nso_n64_controller(joystick_id: sdl3_sys::joystick::SDL_JoystickID) ->
     }
 }
 
-fn controller_button(button: sdl3_sys::gamepad::SDL_GamepadButton) -> Option<ui::config::InputItem> {
+fn controller_button(
+    button: sdl3_sys::gamepad::SDL_GamepadButton,
+) -> Option<ui::config::InputItem> {
     Some(ui::config::InputItem::ControllerButton(
         ui::config::InputKeyButton {
             id: i32::from(button),

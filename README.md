@@ -17,16 +17,21 @@ VibeN64 is not affiliated with or endorsed by the Gopher64 project.
 - Nintendo Switch Online N64 controllers work without setup: a built-in `nso-n64` input profile is used automatically for them.
 - Builds with a stock Xcode toolchain on macOS (no separate LLVM install), and `scripts/bundle-macos.sh` assembles `VibeN64.app`.
 
-Everything else follows upstream: netplay, homebrew support, upscaling, the CRT shader, CPU overclocking, cheats, savestates and RetroAchievements.
+Everything else follows upstream: homebrew support, upscaling, the CRT shader, CPU overclocking, cheats, savestates and RetroAchievements.
 
-## things that still point at Gopher64
+## what VibeN64 does not use
 
-These have not been separated yet, so be aware of them:
+VibeN64 does not lean on services that the Gopher64 project runs or owns:
 
-- **Netplay** uses the Gopher64 project's netplay server and community channels.
-- **Discord Rich Presence** shows up under Gopher64's Discord application.
-- **Documentation** links go to the [Gopher64 wiki](https://github.com/gopher64/gopher64/wiki), which still describes the controls and netplay accurately.
-- The Android project is unchanged from upstream and is not maintained here.
+- **Netplay** is switched off by default. VibeN64 has no netplay server of its own and does not connect to Gopher64's. To play online, run the open source [gopher64-netplay-server](https://github.com/gopher64/gopher64-netplay-server) yourself and start VibeN64 with `NETPLAY_SERVER_URL` set to its address. This path has not been tested yet.
+- **Discord Rich Presence** is switched off, because the Discord application it used belongs to Gopher64.
+- Update checks, source links and problem reports all go to this repository.
+
+The one remaining link is the About page's button to the [Gopher64 wiki](https://github.com/gopher64/gopher64/wiki), which still describes the controls accurately.
+
+## platforms
+
+VibeN64 is developed and tested on Apple Silicon Macs only. The Windows, Linux and Android code inherited from Gopher64 is still in the tree, but it is not built, tested or supported here.
 
 ## download
 
@@ -42,7 +47,7 @@ If you would like to keep all the game data in the same folder as the executable
 
 ## building and usage
 
-1. [Install dependencies](#build-dependencies)
+1. Install Xcode's command line tools (`xcode-select --install`)
 2. [Install rust](https://www.rust-lang.org/tools/install)
 3. `git clone --recursive https://github.com/vibeN64/vibeN64.git`
 4. `cd vibeN64`
@@ -59,13 +64,6 @@ open target/VibeN64.app
 ```
 
 The script finds `llvm-ar` inside the Rust toolchain, so nothing beyond Xcode's command line tools and Rust is needed to compile. When building by hand with plain `cargo build`, set `AR` to that `llvm-ar` yourself; the script shows how.
-
-### build dependencies
-#### Ubuntu 25
-1. [Install the SDL3 dependencies](https://wiki.libsdl.org/SDL3/README-linux#build-dependencies)
-2. ```
-    sudo apt install clang llvm
-    ```
 
 ### working on the interface
 
@@ -95,6 +93,6 @@ VibeN64 is licensed under the GPLv3 license, the same as Gopher64. Many portions
 
 ## privacy
 
-During online netplay sessions, the Gopher64 netplay server logs your IP address and basic session information (game title and session name) for operational purposes.
+VibeN64 checks this repository's GitHub releases for a newer version when it starts. It makes no other network connections unless you turn on RetroAchievements or set up netplay with your own server.
 
 If you enable the RetroAchievements feature, some data is sent to their systems. Please see their terms [here](https://retroachievements.org/terms).

@@ -137,6 +137,10 @@ pub extern "C" fn rust_server_call(
     });
 }
 
+/// Rich Presence needs a Discord application to show up under. The one Gopher64 uses
+/// belongs to that project, so until VibeN64 has its own the feature stays off.
+pub const DISCORD_APPLICATION_ID: Option<&str> = None;
+
 pub fn load_game(
     rom: &[u8],
     rom_size: usize,
@@ -157,6 +161,9 @@ pub fn load_game(
     let mut c_image_url = std::ptr::null();
     unsafe { ra_welcome(&mut c_title, &mut c_image_url) };
 
+    let Some(discord_application_id) = DISCORD_APPLICATION_ID else {
+        return (None, None);
+    };
     if !discord_rich_presence || c_title.is_null() || c_image_url.is_null() {
         (None, None)
     } else {
@@ -164,6 +171,7 @@ pub fn load_game(
         (
             Some(discord_watch_tx),
             Some(init_rich_presence(
+                discord_application_id,
                 discord_watch_rx,
                 unsafe { std::ffi::CStr::from_ptr(c_title) }
                     .to_str()
@@ -287,12 +295,13 @@ pub fn load_state(state: *const u8, state_size: usize) {
 }
 
 pub fn init_rich_presence(
+    discord_application_id: &'static str,
     mut discord_watch_rx: tokio::sync::watch::Receiver<()>,
     game_title: String,
     game_image_url: String,
 ) -> tokio::task::JoinHandle<()> {
     tokio::spawn(async move {
-        let mut client = discord_rich_presence::DiscordIpcClient::new("1395482226463870986");
+        let mut client = discord_rich_presence::DiscordIpcClient::new(discord_application_id);
         let timestamps = discord_rich_presence::activity::Timestamps::new().start(
             std::time::SystemTime::now()
                 .duration_since(std::time::UNIX_EPOCH)

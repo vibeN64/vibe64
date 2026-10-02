@@ -1,7 +1,7 @@
 use crate::device;
 use crate::netplay::RtcIceServerConfig;
 use crate::ui;
-use crate::ui::gui::{AppWindow, open_uri, run_rom, save_settings};
+use crate::ui::gui::{AppWindow, run_rom, save_settings};
 use futures::{SinkExt, StreamExt};
 use sha2::digest::Digest;
 use slint::ComponentHandle;
@@ -264,13 +264,14 @@ fn setup_callbacks(
             .unwrap();
         close_connections(&netplay_write_sender, &netplay_read_sender, &close_ping_tx);
     });
+}
 
-    app.on_netplay_discord_button_clicked(move || {
-        open_uri("https://discord.gg/JyW6ZgBUyS");
-    });
-    app.on_netplay_feedback_button_clicked(move || {
-        open_uri("https://github.com/gopher64/gopher64/discussions/453");
-    });
+/// VibeN64 does not run a netplay server and does not borrow Gopher64's. Netplay only
+/// works when the user points it at a server of their own with NETPLAY_SERVER_URL.
+pub fn netplay_server_url() -> Option<String> {
+    std::env::var("NETPLAY_SERVER_URL")
+        .ok()
+        .filter(|url| !url.is_empty())
 }
 
 fn close_connections(
@@ -291,10 +292,15 @@ fn manage_websocket(
     netplay_read_sender: tokio::sync::broadcast::Sender<Option<NetplayLobbyMessage>>,
     mut netplay_write_receiver: tokio::sync::broadcast::Receiver<Option<NetplayLobbyMessage>>,
 ) {
-    let mut request = std::env::var("NETPLAY_SERVER_URL")
-        .unwrap_or("wss://netplay.gopher64.com".to_string())
-        .into_client_request()
-        .unwrap();
+    // The netplay page offers nothing to click without a server, this is a second line of defence
+    let Some(server_url) = netplay_server_url() else {
+        eprintln!("Netplay is not configured: set NETPLAY_SERVER_URL");
+        return;
+    };
+    let Ok(mut request) = server_url.into_client_request() else {
+        eprintln!("NETPLAY_SERVER_URL is not a valid address");
+        return;
+    };
 
     let mut hasher = sha2::Sha256::new();
     let now = std::time::SystemTime::now()
@@ -1033,6 +1039,8 @@ pub fn netplay_window(
         tokio::sync::broadcast::Sender<()>,
         tokio::sync::broadcast::Receiver<()>,
     ) = tokio::sync::broadcast::channel(5);
+
+    app.set_netplay_available(netplay_server_url().is_some());
 
     setup_callbacks(
         app,

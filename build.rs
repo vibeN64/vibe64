@@ -305,7 +305,7 @@ fn main() {
     println!("cargo:rustc-env=GIT_DESCRIBE={git_describe}");
 
     println!("cargo:rerun-if-env-changed=NETPLAY_ID");
-    let netplay_id = std::env::var("NETPLAY_ID").unwrap_or("gopher64".to_string());
+    let netplay_id = std::env::var("NETPLAY_ID").unwrap_or("viben64".to_string());
     println!("cargo:rustc-env=NETPLAY_ID={netplay_id}");
 
     println!("cargo:rerun-if-env-changed=RA_HARDCORE");
