@@ -244,12 +244,35 @@ fn clear_gb_paths(weak: &slint::Weak<AppWindow>, player: i32) {
     .unwrap();
 }
 
+// Kept outside the window, because the exit handler cannot reach it
+static POWER_OFF_ON_QUIT: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+static GAME_RUNNING: std::sync::atomic::AtomicBool = std::sync::atomic::AtomicBool::new(false);
+
+/// The launcher quitting is the app closing: switch the wireless controllers off, once.
+/// A game that is still running keeps its controllers, and so does a game that was
+/// started on its own, without the launcher.
+#[cfg(not(target_os = "android"))]
+extern "C" fn launcher_exit() {
+    if POWER_OFF_ON_QUIT.swap(false, std::sync::atomic::Ordering::Relaxed)
+        && !GAME_RUNNING.load(std::sync::atomic::Ordering::Relaxed)
+    {
+        ui::input::power_off_controllers();
+    }
+}
+
 fn controller_window(app: &AppWindow, config: &ui::config::Config) {
     #[cfg(not(target_os = "android"))]
     ui::sdl_init(sdl3_sys::init::SDL_INIT_GAMEPAD);
 
     app.set_emulate_vru(config.input.emulate_vru);
     app.set_power_off_controllers(config.input.power_off_controllers);
+    POWER_OFF_ON_QUIT.store(
+        config.input.power_off_controllers,
+        std::sync::atomic::Ordering::Relaxed,
+    );
+    app.on_power_off_controllers_toggled(|enabled| {
+        POWER_OFF_ON_QUIT.store(enabled, std::sync::atomic::Ordering::Relaxed);
+    });
 
     app.set_controller_enabled(slint::ModelRc::from(std::rc::Rc::new(
         slint::VecModel::from(config.input.controller_enabled.to_vec()),
@@ -565,15 +588,21 @@ pub fn app_window(
         app.set_current_page(page);
     }
 
+    #[cfg(not(target_os = "android"))]
+    {
+        // Quit from the menu bar or Dock (Cmd+Q) ends the process without returning from
+        // run() below, so the controllers are also switched off from an exit handler.
+        unsafe extern "C" {
+            fn atexit(callback: extern "C" fn()) -> std::ffi::c_int;
+        }
+        unsafe { atexit(launcher_exit) };
+    }
+
     app.run().unwrap();
     retroachievements::shutdown_client();
 
-    // The launcher quitting is the app closing. A game that is still running keeps its
-    // controllers, and so does one that was started on its own, without the launcher.
     #[cfg(not(target_os = "android"))]
-    if app.get_power_off_controllers() && !app.get_game_running() {
-        ui::input::power_off_controllers();
-    }
+    launcher_exit();
 }
 
 pub fn run_rom(
@@ -589,6 +618,7 @@ pub fn run_rom(
     tokio::spawn(async move {
         weak.upgrade_in_event_loop(move |handle| handle.set_game_running(true))
             .unwrap();
+        GAME_RUNNING.store(true, std::sync::atomic::Ordering::Relaxed);
 
         let cli_path = std::env::current_exe()
             .unwrap()
@@ -638,6 +668,7 @@ pub fn run_rom(
         }
 
         let _ = std::fs::remove_file(cheats_path);
+        GAME_RUNNING.store(false, std::sync::atomic::Ordering::Relaxed);
 
         weak.upgrade_in_event_loop(move |handle| {
             if let Some(rom_dir) = file_path.parent().unwrap().to_str() {

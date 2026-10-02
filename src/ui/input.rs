@@ -714,6 +714,7 @@ pub fn power_off_controllers() {
         if gamepad.is_null() {
             continue;
         }
+        println!("Switching off {}", joystick_name(joystick_id));
         unsafe {
             // over USB the same command would only put the controller to sleep
             if sdl3_sys::gamepad::SDL_GetGamepadConnectionState(gamepad)

@@ -130,6 +130,7 @@ export component ControllerConfig inherits Page {
     callback input_profile_button_clicked;
     callback transferpak_toggled(int, bool);
     callback controller_window_created;
+    callback power_off_controllers_toggled(bool);
     title: @tr("Controller Configuration");
 
     init => {
@@ -171,6 +172,7 @@ export component ControllerConfig inherits Page {
                 checked: ControllerData.power_off_controllers;
                 toggled => {
                     ControllerData.power_off_controllers = self.checked;
+                    root.power_off_controllers_toggled(self.checked);
                 }
             }
         }
