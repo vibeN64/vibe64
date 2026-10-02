@@ -11,6 +11,11 @@ HOST=$(rustc -vV | sed -n 's/^host: //p')
 # .cargo/config.toml asks for llvm-ar, which is not on PATH with a stock Xcode setup
 export AR="${AR:-$HOME/.rustup/toolchains/$TOOLCHAIN-$HOST/lib/rustlib/$HOST/bin/llvm-ar}"
 
+# The oldest macOS the app runs on. It has to be set for the build as well as in
+# Info.plist: without it the C and C++ parts target the build machine's own macOS, and
+# the linker warns about every object being newer than the Rust target minimum.
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.0}"
+
 MOLTENVK="${MOLTENVK_DYLIB:-/opt/homebrew/opt/molten-vk/lib/libMoltenVK.dylib}"
 if [ ! -f "$MOLTENVK" ]; then
   echo "libMoltenVK.dylib not found at $MOLTENVK" >&2
@@ -50,12 +55,35 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$(date +%Y%m%d.%H%M%S)</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
-  <key>LSMinimumSystemVersion</key><string>15.0</string>
+  <key>LSMinimumSystemVersion</key><string>$MACOSX_DEPLOYMENT_TARGET</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>
 PLIST
 
-# ad-hoc signature, enough to run on this Mac
-codesign --force --deep --entitlements data/macos/entitlements_dev.plist -s - "$APP"
+# Signing. Without SIGN_IDENTITY the app gets an ad-hoc signature, which is enough to
+# run on the Mac that built it. With a "Developer ID Application" identity it is signed
+# for distribution (hardened runtime), and NOTARY_PROFILE additionally sends it to Apple
+# for notarisation using that notarytool keychain profile.
+IDENTITY="${SIGN_IDENTITY:--}"
+if [ "$IDENTITY" = "-" ]; then
+  codesign --force --deep --entitlements data/macos/entitlements_dev.plist -s - "$APP"
+else
+  codesign --force --timestamp --options runtime -s "$IDENTITY" "$APP/Contents/Frameworks/libMoltenVK.dylib"
+  codesign --force --timestamp --options runtime -s "$IDENTITY" "$APP"
+  codesign --verify --strict --deep "$APP"
+fi
+
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  if [ "$IDENTITY" = "-" ]; then
+    echo "NOTARY_PROFILE needs SIGN_IDENTITY set to a Developer ID Application identity." >&2
+    exit 1
+  fi
+  ZIP=target/VibeN64-notarize.zip
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$APP"
+  rm -f "$ZIP"
+fi
+
 echo "Built $APP"

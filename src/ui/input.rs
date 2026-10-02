@@ -258,17 +258,12 @@ pub fn get_controller_names() -> Vec<String> {
 
     #[cfg(not(target_os = "android"))]
     {
-        let mut controllers: Vec<String> = vec![];
-
-        for joystick in get_joysticks().iter() {
-            let name = unsafe { sdl3_sys::joystick::SDL_GetJoystickNameForID(*joystick) };
-            controllers.push(if name.is_null() {
-                UNKNOWN_CONTROLLER_NAME.to_string()
-            } else {
-                unsafe { std::ffi::CStr::from_ptr(name).to_str().unwrap() }.to_string()
-            });
-        }
-        controllers.insert(0, "None".into());
+        let mut controllers: Vec<String> = get_joysticks()
+            .iter()
+            .map(|joystick| joystick_name(*joystick))
+            .collect();
+        // A port without a chosen controller takes the first free one (see init)
+        controllers.insert(0, "Automatic".into());
 
         controllers
     }
@@ -297,55 +292,172 @@ pub fn get_controller_paths() -> Vec<String> {
     }
 }
 
+fn joystick_name(joystick_id: sdl3_sys::joystick::SDL_JoystickID) -> String {
+    let name = unsafe { sdl3_sys::joystick::SDL_GetJoystickNameForID(joystick_id) };
+    if name.is_null() {
+        UNKNOWN_CONTROLLER_NAME.to_string()
+    } else {
+        unsafe { std::ffi::CStr::from_ptr(name).to_str().unwrap() }.to_string()
+    }
+}
+
+/// What a port's saved controller assignment is compared against
+fn joystick_path(joystick_id: sdl3_sys::joystick::SDL_JoystickID) -> Option<String> {
+    if cfg!(target_os = "android") {
+        let vendor_id = unsafe { sdl3_sys::joystick::SDL_GetJoystickVendorForID(joystick_id) };
+        let product_id = unsafe { sdl3_sys::joystick::SDL_GetJoystickProductForID(joystick_id) };
+        Some(format!(
+            "{}:{}:{}",
+            joystick_name(joystick_id),
+            vendor_id,
+            product_id
+        ))
+    } else {
+        let path = unsafe { sdl3_sys::joystick::SDL_GetJoystickPathForID(joystick_id) };
+        if path.is_null() {
+            None
+        } else {
+            Some(unsafe { std::ffi::CStr::from_ptr(path).to_str().unwrap() }.to_string())
+        }
+    }
+}
+
+/// Whether a port's input profile reads raw joysticks instead of gamepads
+fn port_uses_dinput(ui: &ui::Ui, port: usize) -> bool {
+    ui.config
+        .input
+        .input_profiles
+        .get(&ui.config.input.input_profile_binding[port])
+        .is_some_and(|profile| profile.dinput)
+}
+
+/// Whether a connected pad can be given to a port: no port has it yet, and it is a
+/// gamepad unless the port reads raw joysticks.
+fn is_free_for_port(
+    ui: &ui::Ui,
+    port: usize,
+    joystick_id: sdl3_sys::joystick::SDL_JoystickID,
+) -> bool {
+    unsafe { sdl3_sys::joystick::SDL_GetJoystickFromID(joystick_id) }.is_null()
+        && (port_uses_dinput(ui, port) || unsafe { sdl3_sys::gamepad::SDL_IsGamepad(joystick_id) })
+}
+
+fn port_is_empty(controller: &Controllers) -> bool {
+    controller.game_controller.is_null() && controller.joystick.is_null()
+}
+
+/// Plugs a connected pad into an N64 port
+fn open_controller(
+    ui: &mut ui::Ui,
+    port: usize,
+    joystick_id: sdl3_sys::joystick::SDL_JoystickID,
+) -> bool {
+    if port_uses_dinput(ui, port) {
+        let joystick = unsafe { sdl3_sys::joystick::SDL_OpenJoystick(joystick_id) };
+        if joystick.is_null() {
+            eprintln!("could not connect joystick: {}", u32::from(joystick_id));
+            return false;
+        }
+        ui.input.controllers[port].joystick = joystick;
+    } else {
+        let gamepad = unsafe { sdl3_sys::gamepad::SDL_OpenGamepad(joystick_id) };
+        if gamepad.is_null() {
+            eprintln!("could not connect gamepad: {}", u32::from(joystick_id));
+            return false;
+        }
+        ui.input.controllers[port].game_controller = gamepad;
+        ui.input.controllers[port].nso_n64 = ui::input_profile::is_nso_n64_controller(joystick_id);
+        // Player lights follow the N64 port the pad is plugged into,
+        // not the order SDL happened to find the devices in.
+        unsafe { sdl3_sys::gamepad::SDL_SetGamepadPlayerIndex(gamepad, port as i32) };
+    }
+    ui.input.controllers[port].guid =
+        unsafe { sdl3_sys::joystick::SDL_GetJoystickGUIDForID(joystick_id) };
+    println!("Player {} uses {}", port + 1, joystick_name(joystick_id));
+    true
+}
+
+/// A pad was switched on or plugged in while a game is running
+fn joystick_connected(ui: &mut ui::Ui, joystick_id: sdl3_sys::joystick::SDL_JoystickID) {
+    // SDL also announces the pads that init() has already opened
+    if !unsafe { sdl3_sys::joystick::SDL_GetJoystickFromID(joystick_id) }.is_null()
+        || !list_joysticks().contains(&joystick_id)
+    {
+        return;
+    }
+
+    // The system's copy of an NSO N64 controller can show up before the real one.
+    // A port that took the copy lets go of it, so that it gets the real one below.
+    if ui::input_profile::is_nso_n64_controller(joystick_id) {
+        for controller in ui.input.controllers.iter_mut() {
+            if !controller.game_controller.is_null()
+                && ui::input_profile::is_nso_n64_system_duplicate(unsafe {
+                    sdl3_sys::gamepad::SDL_GetGamepadID(controller.game_controller)
+                })
+            {
+                unsafe { sdl3_sys::gamepad::SDL_CloseGamepad(controller.game_controller) };
+                controller.game_controller = std::ptr::null_mut();
+            }
+        }
+    }
+
+    // It goes back to the port it was in before, or else to the first enabled port
+    // that has no pad.
+    let guid = unsafe { sdl3_sys::joystick::SDL_GetJoystickGUIDForID(joystick_id) };
+    let open_ports: Vec<usize> = (0..4)
+        .filter(|&port| {
+            ui.config.input.controller_enabled[port]
+                && port_is_empty(&ui.input.controllers[port])
+                && is_free_for_port(ui, port, joystick_id)
+        })
+        .collect();
+    let port = open_ports
+        .iter()
+        .find(|&&port| ui.input.controllers[port].guid == guid)
+        .or(open_ports.first());
+    if let Some(&port) = port
+        && open_controller(ui, port, joystick_id)
+    {
+        ui::video::onscreen_message(
+            &format!("P{}: {} connected", port + 1, joystick_name(joystick_id)),
+            ui::video::MESSAGE_LENGTH_MESSAGE_SHORT,
+        );
+    }
+}
+
+fn joystick_disconnected(ui: &mut ui::Ui, joystick_id: sdl3_sys::joystick::SDL_JoystickID) {
+    for (port, controller) in ui.input.controllers.iter_mut().enumerate() {
+        if !controller.joystick.is_null()
+            && controller.joystick
+                == unsafe { sdl3_sys::joystick::SDL_GetJoystickFromID(joystick_id) }
+        {
+            unsafe { sdl3_sys::joystick::SDL_CloseJoystick(controller.joystick) };
+            controller.joystick = std::ptr::null_mut();
+        } else if !controller.game_controller.is_null()
+            && controller.game_controller
+                == unsafe { sdl3_sys::gamepad::SDL_GetGamepadFromID(joystick_id) }
+        {
+            unsafe { sdl3_sys::gamepad::SDL_CloseGamepad(controller.game_controller) };
+            controller.game_controller = std::ptr::null_mut();
+            controller.nso_n64 = false;
+        } else {
+            continue;
+        }
+        ui::video::onscreen_message(
+            &format!("P{}: controller disconnected", port + 1),
+            ui::video::MESSAGE_LENGTH_MESSAGE_SHORT,
+        );
+    }
+}
+
 fn handle_joystick_events(ui: &mut ui::Ui) {
     let joystick_event = unsafe { ui::video::get_joystick_event() };
     if joystick_event.joystick_id != 0 {
         let joystick_id = sdl3_sys::joystick::SDL_JoystickID(joystick_event.joystick_id);
-        for (i, controller) in ui.input.controllers.iter_mut().enumerate() {
-            if joystick_event.connected {
-                if let Some(profile) = ui
-                    .config
-                    .input
-                    .input_profiles
-                    .get(&ui.config.input.input_profile_binding[i])
-                {
-                    if profile.dinput {
-                        if controller.joystick.is_null()
-                            && controller.guid
-                                == unsafe {
-                                    sdl3_sys::joystick::SDL_GetJoystickGUIDForID(joystick_id)
-                                }
-                        {
-                            controller.joystick =
-                                unsafe { sdl3_sys::joystick::SDL_OpenJoystick(joystick_id) };
-                        }
-                    } else {
-                        if controller.game_controller.is_null()
-                            && controller.guid
-                                == unsafe {
-                                    sdl3_sys::gamepad::SDL_GetGamepadGUIDForID(joystick_id)
-                                }
-                        {
-                            controller.game_controller =
-                                unsafe { sdl3_sys::gamepad::SDL_OpenGamepad(joystick_id) };
-                        }
-                    }
-                }
-            } else {
-                if !controller.joystick.is_null()
-                    && controller.joystick
-                        == unsafe { sdl3_sys::joystick::SDL_GetJoystickFromID(joystick_id) }
-                {
-                    unsafe { sdl3_sys::joystick::SDL_CloseJoystick(controller.joystick) };
-                    controller.joystick = std::ptr::null_mut();
-                } else if !controller.game_controller.is_null()
-                    && controller.game_controller
-                        == unsafe { sdl3_sys::gamepad::SDL_GetGamepadFromID(joystick_id) }
-                {
-                    unsafe { sdl3_sys::gamepad::SDL_CloseGamepad(controller.game_controller) };
-                    controller.game_controller = std::ptr::null_mut();
-                }
-            }
+        if joystick_event.connected {
+            joystick_connected(ui, joystick_id);
+        } else {
+            joystick_disconnected(ui, joystick_id);
         }
     }
 }
@@ -487,19 +599,60 @@ pub fn clear_bindings(config: &mut ui::config::Config) {
     }
 }
 
-pub fn get_joysticks() -> Vec<sdl3_sys::joystick::SDL_JoystickID> {
-    unsafe { sdl3_sys::events::SDL_PumpEvents() };
+/// The hidden system copy of an NSO N64 controller is found first and takes player slot
+/// one, which leaves the real pad showing two lights. Give the real pads the first slots.
+/// Once a game starts, the lights follow the port the pad is assigned to instead.
+fn claim_player_slots(joysticks: &[sdl3_sys::joystick::SDL_JoystickID]) {
+    for (slot, joystick_id) in joysticks
+        .iter()
+        .filter(|joystick| ui::input_profile::is_nso_n64_controller(**joystick))
+        .enumerate()
+    {
+        let slot = slot as i32;
+        let in_use = !unsafe { sdl3_sys::joystick::SDL_GetJoystickFromID(*joystick_id) }.is_null();
+        if !in_use
+            && unsafe { sdl3_sys::joystick::SDL_GetJoystickPlayerIndexForID(*joystick_id) } != slot
+        {
+            let joystick = unsafe { sdl3_sys::joystick::SDL_OpenJoystick(*joystick_id) };
+            if !joystick.is_null() {
+                unsafe {
+                    sdl3_sys::joystick::SDL_SetJoystickPlayerIndex(joystick, slot);
+                    sdl3_sys::joystick::SDL_CloseJoystick(joystick);
+                }
+            }
+        }
+    }
+}
+
+/// The connected pads, without the hidden system copies of NSO N64 controllers
+fn list_joysticks() -> Vec<sdl3_sys::joystick::SDL_JoystickID> {
     let mut num_joysticks = 0;
     let sdl_joysticks = unsafe { sdl3_sys::joystick::SDL_GetJoysticks(&mut num_joysticks) };
     if !sdl_joysticks.is_null() {
-        let parts =
+        let mut parts =
             unsafe { std::slice::from_raw_parts(sdl_joysticks, num_joysticks as usize) }.to_vec();
         unsafe { sdl3_sys::stdinc::SDL_free(sdl_joysticks as *mut std::ffi::c_void) };
+        // macOS also offers the NSO N64 controller through its own GameController
+        // framework. SDL does not fold that copy into the real one, and it has no C
+        // buttons, so it is left out whenever the real one is there.
+        if parts
+            .iter()
+            .any(|joystick| ui::input_profile::is_nso_n64_controller(*joystick))
+        {
+            parts.retain(|joystick| !ui::input_profile::is_nso_n64_system_duplicate(*joystick));
+        }
         parts
     } else {
         eprintln!("Could not get joysticks");
         vec![]
     }
+}
+
+pub fn get_joysticks() -> Vec<sdl3_sys::joystick::SDL_JoystickID> {
+    unsafe { sdl3_sys::events::SDL_PumpEvents() };
+    let joysticks = list_joysticks();
+    claim_player_slots(&joysticks);
+    joysticks
 }
 
 pub fn init(ui: &mut ui::Ui) {
@@ -511,84 +664,52 @@ pub fn init(ui: &mut ui::Ui) {
         panic!("Could not get keyboard state");
     }
 
-    for i in 0..4 {
-        if let Some(controller_assignment) = &ui.config.input.controller_assignment[i]
-            && ui.config.input.controller_enabled[i]
+    unsafe { sdl3_sys::events::SDL_PumpEvents() };
+    let joysticks = list_joysticks();
+
+    // Ports with a chosen controller get it first...
+    for port in 0..4 {
+        if ui.config.input.controller_enabled[port]
+            && let Some(assignment) = ui.config.input.controller_assignment[port].clone()
+            && let Some(joystick_id) = joysticks.iter().copied().find(|joystick| {
+                joystick_path(*joystick).as_ref() == Some(&assignment)
+                    && is_free_for_port(ui, port, *joystick)
+            })
         {
-            let mut joystick_id = sdl3_sys::everything::SDL_JoystickID(0);
+            open_controller(ui, port, joystick_id);
+        }
+    }
 
-            for joystick in get_joysticks().iter() {
-                let path = if cfg!(target_os = "android") {
-                    let name = if let name =
-                        unsafe { sdl3_sys::joystick::SDL_GetJoystickNameForID(*joystick) }
-                        && !name.is_null()
-                    {
-                        unsafe { std::ffi::CStr::from_ptr(name).to_str().unwrap() }.to_string()
-                    } else {
-                        UNKNOWN_CONTROLLER_NAME.to_string()
-                    };
-
-                    let vendor_id =
-                        unsafe { sdl3_sys::joystick::SDL_GetJoystickVendorForID(*joystick) };
-                    let product_id =
-                        unsafe { sdl3_sys::joystick::SDL_GetJoystickProductForID(*joystick) };
-                    Some(format!("{}:{}:{}", name, vendor_id, product_id))
-                } else {
-                    let path = unsafe { sdl3_sys::joystick::SDL_GetJoystickPathForID(*joystick) };
-                    if !path.is_null() {
-                        Some(
-                            unsafe { std::ffi::CStr::from_ptr(path).to_str().unwrap() }.to_string(),
-                        )
-                    } else {
-                        None
-                    }
-                };
-                if let Some(path) = path
-                    && path == *controller_assignment
-                    && unsafe { sdl3_sys::joystick::SDL_GetJoystickFromID(*joystick) }.is_null()
-                    && unsafe { sdl3_sys::gamepad::SDL_GetGamepadFromID(*joystick) }.is_null()
-                {
-                    joystick_id = *joystick;
-                    break;
-                }
-            }
-
-            if joystick_id != 0
-                && let Some(profile) = ui
-                    .config
-                    .input
-                    .input_profiles
-                    .get(&ui.config.input.input_profile_binding[i])
-            {
-                if !profile.dinput {
-                    let gamepad = unsafe { sdl3_sys::gamepad::SDL_OpenGamepad(joystick_id) };
-                    if gamepad.is_null() {
-                        eprintln!("could not connect gamepad: {}", u32::from(joystick_id))
-                    } else {
-                        ui.input.controllers[i].game_controller = gamepad;
-                        ui.input.controllers[i].guid =
-                            unsafe { sdl3_sys::gamepad::SDL_GetGamepadGUIDForID(joystick_id) };
-                        ui.input.controllers[i].nso_n64 =
-                            ui::input_profile::is_nso_n64_controller(joystick_id);
-                    }
-                } else {
-                    let joystick = unsafe { sdl3_sys::joystick::SDL_OpenJoystick(joystick_id) };
-                    if joystick.is_null() {
-                        eprintln!("could not connect joystick: {}", u32::from(joystick_id))
-                    } else {
-                        ui.input.controllers[i].joystick = joystick;
-                        ui.input.controllers[i].guid =
-                            unsafe { sdl3_sys::joystick::SDL_GetJoystickGUIDForID(joystick_id) };
-                    }
-                }
-            } else {
-                eprintln!("Could not bind assigned controller");
-            }
+    // ...then every enabled port still without one takes the next free controller.
+    // This also covers a chosen controller that cannot be found, which is the normal
+    // case for Bluetooth pads: they come back under a new path after each reconnect.
+    for port in 0..4 {
+        if ui.config.input.controller_enabled[port]
+            && port_is_empty(&ui.input.controllers[port])
+            && let Some(joystick_id) = joysticks
+                .iter()
+                .copied()
+                .find(|joystick| is_free_for_port(ui, port, *joystick))
+        {
+            open_controller(ui, port, joystick_id);
         }
     }
 }
 
 pub fn close(ui: &mut ui::Ui) {
+    // A game can end while a pad is shaking. SDL's Switch driver holds back a "stop" that
+    // comes within 30 ms of its last rumble packet and sends it on a later update, so
+    // without that update the pad is closed still shaking, and it does not stop by itself.
+    if ui.input.controllers.iter().any(|c| !port_is_empty(c)) {
+        for channel in 0..ui.input.controllers.len() {
+            set_rumble(ui, channel, 0);
+        }
+        unsafe {
+            sdl3_sys::timer::SDL_Delay(40);
+            sdl3_sys::joystick::SDL_UpdateJoysticks();
+        }
+    }
+
     for controller in ui.input.controllers.iter_mut() {
         if !controller.joystick.is_null() {
             unsafe { sdl3_sys::joystick::SDL_CloseJoystick(controller.joystick) }

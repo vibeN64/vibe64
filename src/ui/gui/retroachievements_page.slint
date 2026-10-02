@@ -88,19 +88,6 @@ export component RetroAchievements inherits Page {
                 }
             }
         }
-
-        SettingRow {
-            label: @tr("Discord Rich Presence");
-
-            VSwitch {
-                checked: RAData.rich_presence;
-                enabled: RAData.enabled;
-                toggled => {
-                    RAData.rich_presence = self.checked;
-                    ra_toggled(RAData.enabled,RAData.hardcore,RAData.challenge,RAData.leaderboard,RAData.rich_presence);
-                }
-            }
-        }
     }
 
     Card {

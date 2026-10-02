@@ -21,18 +21,29 @@ export global NetplayData {
     in-out property <bool> show_wait_session;
     in-out property <bool> show_create_session;
     in-out property <bool> show_join_session;
+    // false unless the user has set up a netplay server of their own
+    in property <bool> available;
 }
 
 export component Netplay inherits Page {
     callback create_session_button_clicked;
     callback join_session_button_clicked;
-    callback netplay_discord_button_clicked;
-    callback netplay_feedback_button_clicked;
     title: @tr("Netplay");
 
-    Card {
+    if !NetplayData.available: Card {
+        title: @tr("Netplay is switched off");
+
+        Text {
+            text: @tr("VibeN64 does not run a netplay server, and it does not use the Gopher64 project's server. To play online you need a server of your own: run the open source gopher64-netplay-server, then start VibeN64 with NETPLAY_SERVER_URL set to its address.");
+            color: Theme.text-muted;
+            font-size: 13px;
+            wrap: word-wrap;
+        }
+    }
+
+    if NetplayData.available: Card {
         title: @tr("Play online");
-        description: @tr("Host a session for friends to join, or join one that is already running.");
+        description: @tr("Host a session for friends to join, or join one that is already running. Sessions go through the netplay server you configured.");
 
         ButtonRow {
             VButton {
@@ -51,27 +62,6 @@ export component Netplay inherits Page {
                 text: @tr("Join Session");
                 clicked => {
                     join_session_button_clicked();
-                }
-            }
-        }
-    }
-
-    Card {
-        title: @tr("Community");
-        description: @tr("Netplay runs on the Gopher64 project's servers and community channels.");
-
-        ButtonRow {
-            VButton {
-                text: @tr("Netplay Discord Channel");
-                clicked => {
-                    netplay_discord_button_clicked();
-                }
-            }
-
-            VButton {
-                text: @tr("Provide Feedback");
-                clicked => {
-                    netplay_feedback_button_clicked();
                 }
             }
         }

@@ -941,7 +941,23 @@ pub fn is_nso_n64_controller(joystick_id: sdl3_sys::joystick::SDL_JoystickID) ->
     }
 }
 
-fn controller_button(button: sdl3_sys::gamepad::SDL_GamepadButton) -> Option<ui::config::InputItem> {
+/// The second, incomplete copy of the NSO N64 controller that macOS's GameController
+/// framework exposes: an Apple vendor ID and no C buttons.
+pub fn is_nso_n64_system_duplicate(joystick_id: sdl3_sys::joystick::SDL_JoystickID) -> bool {
+    const APPLE_VENDOR_ID: u16 = 0x05ac;
+    const GAME_CONTROLLER_PRODUCT_ID: u16 = 0x0004;
+
+    let name = unsafe { sdl3_sys::joystick::SDL_GetJoystickNameForID(joystick_id) };
+    !name.is_null()
+        && unsafe { std::ffi::CStr::from_ptr(name) }.to_bytes() == b"N64 Controller"
+        && unsafe { sdl3_sys::joystick::SDL_GetJoystickVendorForID(joystick_id) } == APPLE_VENDOR_ID
+        && unsafe { sdl3_sys::joystick::SDL_GetJoystickProductForID(joystick_id) }
+            == GAME_CONTROLLER_PRODUCT_ID
+}
+
+fn controller_button(
+    button: sdl3_sys::gamepad::SDL_GamepadButton,
+) -> Option<ui::config::InputItem> {
     Some(ui::config::InputItem::ControllerButton(
         ui::config::InputKeyButton {
             id: i32::from(button),

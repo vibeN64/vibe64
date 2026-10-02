@@ -44,8 +44,6 @@ export component AppWindow inherits Window {
     callback transferpak_toggled(int, bool);
     callback create_session_button_clicked;
     callback join_session_button_clicked;
-    callback netplay_discord_button_clicked;
-    callback netplay_feedback_button_clicked;
     callback netplay_begin_game(int);
     callback netplay_send_chat_message(string);
     callback netplay_refresh_sessions;
@@ -124,6 +122,7 @@ export component AppWindow inherits Window {
     in-out property netplay_sessions <=> NetplayData.sessions;
     in-out property netplay_pending_refresh <=> NetplayData.pending_refresh;
     in-out property netplay_session_name <=> NetplayData.session_name;
+    in property netplay_available <=> NetplayData.available;
     in-out property netplay_player_name <=> NetplayData.player_name;
     in-out property netplay_motd <=> NetplayWaitData.motd;
     in-out property netplay_can_start <=> NetplayWaitData.can_start;
@@ -260,12 +259,6 @@ export component AppWindow inherits Window {
             }
             join_session_button_clicked => {
                 join_session_button_clicked();
-            }
-            netplay_discord_button_clicked => {
-                netplay_discord_button_clicked();
-            }
-            netplay_feedback_button_clicked => {
-                netplay_feedback_button_clicked();
             }
         }
         if(side-bar.current-item == 2 && show_netplay_wait_session): NetplayWait {

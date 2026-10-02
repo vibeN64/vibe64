@@ -232,9 +232,8 @@ pub fn connect_pif_channels(device: &mut device::Device) {
     device.pif.channels[4].process = Some(device::cart::process)
 }
 
-fn get_default_handler(device: &device::Device) -> device::controller::PakHandler {
-    if device.ui.game_id == "NCT" {
-        // Chameleon Twist does not support the mempak
+fn get_default_handler(device: &device::Device, port: usize) -> device::controller::PakHandler {
+    if device::controller::rumble::prefers_rumble_pak(&device.cart.rom, &device.ui.game_id, port) {
         device::controller::PakHandler {
             read: device::controller::rumble::read,
             write: device::controller::rumble::write,
@@ -267,7 +266,6 @@ pub fn reset_pif(device: &mut device::Device, is_nmi_reset: bool) {
 pub fn init(device: &mut device::Device) {
     reset_pif(device, false);
 
-    let default_handler = get_default_handler(device);
     let tpak_handler = device::controller::PakHandler {
         read: device::controller::transferpak::read,
         write: device::controller::transferpak::write,
@@ -277,6 +275,7 @@ pub fn init(device: &mut device::Device) {
     connect_pif_channels(device);
 
     for i in 0..4 {
+        let default_handler = get_default_handler(device, i);
         if let Some(netplay) = &device.netplay {
             if netplay.connected[i] {
                 device.pif.channels[i].pak_handler = Some(default_handler);

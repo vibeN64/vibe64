@@ -155,7 +155,10 @@ static void add_joystick_event(void *userdata) {
 }
 
 bool sdl_event_filter(void *userdata, SDL_Event *event) {
-  if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED) {
+  // SDL_EVENT_QUIT is Cmd+Q, or a request to terminate: end the game the same way as
+  // closing its window, so that saves are written and controllers are released.
+  if (event->type == SDL_EVENT_WINDOW_CLOSE_REQUESTED ||
+      event->type == SDL_EVENT_QUIT) {
     callback.paused = false;
     callback.emu_running = false;
   } else if (event->type == SDL_EVENT_WINDOW_PIXEL_SIZE_CHANGED &&
@@ -419,6 +422,14 @@ void rdp_init(void *_window, GFX_INFO _gfx_info, const void *font,
   wsi_platform = new SDL_WSIPlatform;
   wsi_platform->set_window(window);
   wsi->set_platform(wsi_platform);
+#ifdef __APPLE__
+  // MoltenVK has no MAILBOX mode, so asking for "no tearing" gives FIFO, which blocks
+  // until the display takes the frame. In fullscreen on a ProMotion display that
+  // fights the emulator's own frame pacing: the display slows down to match, the
+  // emulator falls further behind, and it settles at about half speed with the audio
+  // starving. IMMEDIATE never blocks, so it is used whatever the VSync setting says.
+  wsi->set_present_mode(PresentMode::UnlockedMaybeTear);
+#else
   if (gfx_info.vsync) {
     // VK_PRESENT_MODE_MAILBOX_KHR, fallback to VK_PRESENT_MODE_FIFO_KHR
     wsi->set_present_mode(PresentMode::UnlockedNoTearing);
@@ -426,6 +437,7 @@ void rdp_init(void *_window, GFX_INFO _gfx_info, const void *font,
     // VK_PRESENT_MODE_MAILBOX_KHR, fallback to VK_PRESENT_MODE_IMMEDIATE_KHR
     wsi->set_present_mode(PresentMode::UnlockedMaybeTear);
   }
+#endif
   wsi->set_backbuffer_srgb(false);
   Context::SystemHandles handles = {};
   if (!::Vulkan::Context::init_loader(
