@@ -15,6 +15,8 @@ pub struct Controllers {
     pub joystick: *mut sdl3_sys::joystick::SDL_Joystick,
     pub guid: sdl3_sys::guid::SDL_GUID,
     pub last_key_state: u32,
+    /// A Nintendo Switch Online N64 controller is plugged into this port
+    pub nso_n64: bool,
 }
 
 #[derive(Default, PartialEq, Copy, Clone, serde::Serialize, serde::Deserialize)]
@@ -386,7 +388,12 @@ fn handle_hotkeys(keys: u32, last_key_state: u32) {
 pub fn get(ui: &mut ui::Ui, channel: usize) -> InputData {
     handle_joystick_events(ui);
 
-    let profile_name = &ui.config.input.input_profile_binding[channel];
+    let mut profile_name = ui.config.input.input_profile_binding[channel].as_str();
+    // The default profile cannot work with an NSO N64 controller (see get_nso_n64_profile),
+    // so a port left on "default" gets the built-in N64 layout while one is attached.
+    if ui.input.controllers[channel].nso_n64 && profile_name == "default" {
+        profile_name = ui::input_profile::NSO_N64_PROFILE;
+    }
     let Some(profile) = ui.config.input.input_profiles.get(profile_name) else {
         eprintln!("Invalid profile name: {profile_name}");
         return InputData {
@@ -561,6 +568,8 @@ pub fn init(ui: &mut ui::Ui) {
                         ui.input.controllers[i].game_controller = gamepad;
                         ui.input.controllers[i].guid =
                             unsafe { sdl3_sys::gamepad::SDL_GetGamepadGUIDForID(joystick_id) };
+                        ui.input.controllers[i].nso_n64 =
+                            ui::input_profile::is_nso_n64_controller(joystick_id);
                     }
                 } else {
                     let joystick = unsafe { sdl3_sys::joystick::SDL_OpenJoystick(joystick_id) };

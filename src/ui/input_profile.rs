@@ -927,3 +927,57 @@ pub fn get_default_profile() -> ui::config::InputProfile {
         deadzone: DEADZONE_DEFAULT,
     }
 }
+
+/// Name of the built-in profile for the Nintendo Switch Online N64 controller.
+pub const NSO_N64_PROFILE: &str = "nso-n64";
+
+const NINTENDO_VENDOR_ID: u16 = 0x057e;
+const NSO_N64_PRODUCT_ID: u16 = 0x2019;
+
+pub fn is_nso_n64_controller(joystick_id: sdl3_sys::joystick::SDL_JoystickID) -> bool {
+    unsafe {
+        sdl3_sys::joystick::SDL_GetJoystickVendorForID(joystick_id) == NINTENDO_VENDOR_ID
+            && sdl3_sys::joystick::SDL_GetJoystickProductForID(joystick_id) == NSO_N64_PRODUCT_ID
+    }
+}
+
+fn controller_button(button: sdl3_sys::gamepad::SDL_GamepadButton) -> Option<ui::config::InputItem> {
+    Some(ui::config::InputItem::ControllerButton(
+        ui::config::InputKeyButton {
+            id: i32::from(button),
+        },
+    ))
+}
+
+/// The NSO N64 controller talks like a Switch Pro Controller and has no right stick, so
+/// SDL reports its buttons under names that the default (Xbox style) profile does not
+/// expect. This is where each physical button ends up:
+///
+/// | N64 button | Sent as (Switch) | SDL gamepad element |
+/// | --- | --- | --- |
+/// | A | A | South |
+/// | B | B | East |
+/// | C-Up | Y | Back |
+/// | C-Down | ZR | West |
+/// | C-Left | X | North |
+/// | C-Right | Minus | Misc2 |
+/// | Z | ZL | Left trigger |
+/// | L / R | L / R | Left / right shoulder |
+/// | Start | Plus | Start |
+/// | Capture | Capture | Misc1 |
+///
+/// The keyboard half of the profile is the same as the default one.
+pub fn get_nso_n64_profile() -> ui::config::InputProfile {
+    let mut profile = get_default_profile();
+
+    profile.inputs[A_BUTTON][1] = controller_button(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_SOUTH);
+    profile.inputs[B_BUTTON][1] = controller_button(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_EAST);
+    profile.inputs[U_CBUTTON][1] = controller_button(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_BACK);
+    profile.inputs[D_CBUTTON][1] = controller_button(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_WEST);
+    profile.inputs[L_CBUTTON][1] = controller_button(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_NORTH);
+    profile.inputs[R_CBUTTON][1] = controller_button(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_MISC2);
+    // Back is C-Up on this pad, so the hotkey modifier moves to the Capture button
+    profile.inputs[HOTKEY][1] = controller_button(sdl3_sys::gamepad::SDL_GAMEPAD_BUTTON_MISC1);
+
+    profile
+}

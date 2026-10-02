@@ -139,6 +139,15 @@ fn write_config(config: &Config) {
     }
 }
 
+// Profiles that ship with the emulator are added to configs written before they existed.
+// One that is already there is left alone, in case it has been edited.
+fn add_builtin_profiles(input: &mut Input) {
+    input
+        .input_profiles
+        .entry(ui::input_profile::NSO_N64_PROFILE.to_string())
+        .or_insert_with(ui::input_profile::get_nso_n64_profile);
+}
+
 impl Config {
     pub fn new() -> Config {
         let dirs = ui::get_dirs();
@@ -149,6 +158,7 @@ impl Config {
             let result = serde_json::from_slice::<Config>(config_file.as_ref());
             if let Ok(mut result) = result {
                 result.write_to_disk = true;
+                add_builtin_profiles(&mut result.input);
                 return result;
             }
 
@@ -160,11 +170,18 @@ impl Config {
                 input_data = Some(data);
             }
         }
+        if let Some(input_data) = &mut input_data {
+            add_builtin_profiles(input_data);
+        }
 
         let mut input_profiles = std::collections::BTreeMap::new();
         input_profiles.insert(
             "default".to_string(),
             ui::input_profile::get_default_profile(),
+        );
+        input_profiles.insert(
+            ui::input_profile::NSO_N64_PROFILE.to_string(),
+            ui::input_profile::get_nso_n64_profile(),
         );
         Config {
             input: input_data.unwrap_or(Input {

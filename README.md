@@ -14,6 +14,7 @@ Vibe64 is not affiliated with or endorsed by the Gopher64 project.
 - A redesigned interface: themed cards, buttons and switches in place of the stock widgets.
 - Its own name, icon, app identifier and data folders, so it can sit beside a Gopher64 install without sharing settings or saves.
 - No donation prompts in the app.
+- Nintendo Switch Online N64 controllers work without setup: a built-in `nso-n64` input profile is used automatically for them.
 - Builds with a stock Xcode toolchain on macOS (no separate LLVM install), and `scripts/bundle-macos.sh` assembles `Vibe64.app`.
 
 Everything else follows upstream: netplay, homebrew support, upscaling, the CRT shader, CPU overclocking, cheats, savestates and RetroAchievements.

@@ -146,6 +146,13 @@ export component ControllerConfig inherits Page {
         }
     }
 
+    Text {
+        text: @tr("Nintendo Switch Online N64 controllers are recognised automatically. Leave their profile on \"default\" and they use the built-in \"nso-n64\" layout.");
+        color: Theme.text-muted;
+        font-size: 12px;
+        wrap: word-wrap;
+    }
+
     for player[index] in [0, 1, 2, 3]: PortCard {
         index: index;
         transferpak_toggled(port, enabled) => {
