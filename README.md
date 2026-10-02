@@ -1,13 +1,13 @@
-# Vibe64
+# VibeN64
 
-Vibe64 is an N64 emulator. It is a fork of [Gopher64](https://github.com/gopher64/gopher64) by Logan McNaughton and the Gopher64 contributors, and the emulation is their work.
+VibeN64 is an N64 emulator. It is a fork of [Gopher64](https://github.com/gopher64/gopher64) by Logan McNaughton and the Gopher64 contributors, and the emulation is their work.
 
-The fork exists for one reason: Gopher64 does not accept AI-assisted contributions, and Vibe64 does.
+The fork exists for one reason: Gopher64 does not accept AI-assisted contributions, and VibeN64 does.
 
-Vibe64 is not affiliated with or endorsed by the Gopher64 project.
+VibeN64 is not affiliated with or endorsed by the Gopher64 project.
 
-- Please report Vibe64 problems [here](https://github.com/vibeN64/vibe64/issues), not upstream.
-- Please do not send Vibe64 changes to Gopher64 as pull requests. Their policy forbids it.
+- Please report VibeN64 problems [here](https://github.com/vibeN64/vibeN64/issues), not upstream.
+- Please do not send VibeN64 changes to Gopher64 as pull requests. Their policy forbids it.
 
 ## what is different from Gopher64
 
@@ -15,7 +15,7 @@ Vibe64 is not affiliated with or endorsed by the Gopher64 project.
 - Its own name, icon, app identifier and data folders, so it can sit beside a Gopher64 install without sharing settings or saves.
 - No donation prompts in the app.
 - Nintendo Switch Online N64 controllers work without setup: a built-in `nso-n64` input profile is used automatically for them.
-- Builds with a stock Xcode toolchain on macOS (no separate LLVM install), and `scripts/bundle-macos.sh` assembles `Vibe64.app`.
+- Builds with a stock Xcode toolchain on macOS (no separate LLVM install), and `scripts/bundle-macos.sh` assembles `VibeN64.app`.
 
 Everything else follows upstream: netplay, homebrew support, upscaling, the CRT shader, CPU overclocking, cheats, savestates and RetroAchievements.
 
@@ -44,18 +44,18 @@ If you would like to keep all the game data in the same folder as the executable
 
 1. [Install dependencies](#build-dependencies)
 2. [Install rust](https://www.rust-lang.org/tools/install)
-3. `git clone --recursive https://github.com/vibeN64/vibe64.git`
-4. `cd vibe64`
+3. `git clone --recursive https://github.com/vibeN64/vibeN64.git`
+4. `cd vibeN64`
 5. `git submodule update --init --recursive`
 6. `cargo build --release`
-7. `./target/release/vibe64 /path/to/rom.z64`
+7. `./target/release/viben64 /path/to/rom.z64`
 
 ### macOS app bundle
 
 ```
 brew install molten-vk
 ./scripts/bundle-macos.sh
-open target/Vibe64.app
+open target/VibeN64.app
 ```
 
 The script finds `llvm-ar` inside the Rust toolchain, so nothing beyond Xcode's command line tools and Rust is needed to compile. When building by hand with plain `cargo build`, set `AR` to that `llvm-ar` yourself; the script shows how.
@@ -69,7 +69,7 @@ The script finds `llvm-ar` inside the Rust toolchain, so nothing beyond Xcode's 
 
 ### working on the interface
 
-Set `VIBE64_PAGE` to open straight onto a sidebar page, counting from 0. For example `VIBE64_PAGE=5 ./target/release/vibe64` opens Settings.
+Set `VIBEN64_PAGE` to open straight onto a sidebar page, counting from 0. For example `VIBEN64_PAGE=5 ./target/release/viben64` opens Settings.
 
 ## keeping up with Gopher64
 
@@ -91,7 +91,7 @@ AI-assisted and "vibe coded" pull requests are welcome. So are entirely hand-wri
 
 ## license
 
-Vibe64 is licensed under the GPLv3 license, the same as Gopher64. Many portions of Gopher64 have been adapted from mupen64plus and/or ares. The license for mupen64plus can be found [here](https://github.com/mupen64plus/mupen64plus-core/blob/master/LICENSES). The license for ares can be found [here](https://github.com/ares-emulator/ares/blob/master/LICENSE).
+VibeN64 is licensed under the GPLv3 license, the same as Gopher64. Many portions of Gopher64 have been adapted from mupen64plus and/or ares. The license for mupen64plus can be found [here](https://github.com/mupen64plus/mupen64plus-core/blob/master/LICENSES). The license for ares can be found [here](https://github.com/ares-emulator/ares/blob/master/LICENSE).
 
 ## privacy
 

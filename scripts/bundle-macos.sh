@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Builds Vibe64 and assembles target/Vibe64.app, without needing cargo-bundle.
+# Builds VibeN64 and assembles target/VibeN64.app, without needing cargo-bundle.
 #
 # MoltenVK (the Vulkan-on-Metal layer) has to ship inside the app. It is taken from
 # Homebrew (`brew install molten-vk`) or from the path in MOLTENVK_DYLIB.
@@ -20,31 +20,31 @@ fi
 
 cargo build --release
 
-APP=target/Vibe64.app
+APP=target/VibeN64.app
 VERSION=$(sed -n 's/^version = "\(.*\)"/\1/p' Cargo.toml | head -1)
 rm -rf "$APP"
 mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources" "$APP/Contents/Frameworks"
-cp target/release/vibe64 "$APP/Contents/MacOS/vibe64"
+cp target/release/viben64 "$APP/Contents/MacOS/viben64"
 cp "$MOLTENVK" "$APP/Contents/Frameworks/libMoltenVK.dylib"
 
-ICONSET=$(mktemp -d)/vibe64.iconset
+ICONSET=$(mktemp -d)/viben64.iconset
 mkdir -p "$ICONSET"
 for size in 16 32 128 256 512; do
-  sips -z $size $size data/icon/vibe64.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
-  sips -z $((size * 2)) $((size * 2)) data/icon/vibe64.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
+  sips -z $size $size data/icon/viben64.png --out "$ICONSET/icon_${size}x${size}.png" >/dev/null
+  sips -z $((size * 2)) $((size * 2)) data/icon/viben64.png --out "$ICONSET/icon_${size}x${size}@2x.png" >/dev/null
 done
-iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/vibe64.icns"
+iconutil -c icns "$ICONSET" -o "$APP/Contents/Resources/viben64.icns"
 
 cat > "$APP/Contents/Info.plist" <<PLIST
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
 <plist version="1.0">
 <dict>
-  <key>CFBundleName</key><string>Vibe64</string>
-  <key>CFBundleDisplayName</key><string>Vibe64</string>
-  <key>CFBundleIdentifier</key><string>io.github.viben64.vibe64</string>
-  <key>CFBundleExecutable</key><string>vibe64</string>
-  <key>CFBundleIconFile</key><string>vibe64.icns</string>
+  <key>CFBundleName</key><string>VibeN64</string>
+  <key>CFBundleDisplayName</key><string>VibeN64</string>
+  <key>CFBundleIdentifier</key><string>io.github.viben64.viben64</string>
+  <key>CFBundleExecutable</key><string>viben64</string>
+  <key>CFBundleIconFile</key><string>viben64.icns</string>
   <key>CFBundlePackageType</key><string>APPL</string>
   <key>CFBundleInfoDictionaryVersion</key><string>6.0</string>
   <key>CFBundleShortVersionString</key><string>$VERSION</string>

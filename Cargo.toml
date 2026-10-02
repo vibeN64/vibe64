@@ -1,5 +1,5 @@
 [package]
-name = "vibe64"
+name = "viben64"
 version = "1.1.36"
 edition = "2024"
 rust-version = "1.98.1"
@@ -72,10 +72,10 @@ debug = true
 strip = false
 
 [package.metadata.bundle]
-name = "Vibe64"
-identifier = "io.github.viben64.vibe64"
+name = "VibeN64"
+identifier = "io.github.viben64.viben64"
 category = "public.app-category.games"
-icon = ["data/icon/vibe64_128x128.png","data/icon/vibe64_256x256.png","data/icon/vibe64_512x512.png"]
+icon = ["data/icon/viben64_128x128.png","data/icon/viben64_256x256.png","data/icon/viben64_512x512.png"]
 
 [package.metadata.bundle.osx]
 frameworks = ["/opt/homebrew/opt/molten-vk/lib/libMoltenVK.dylib"]

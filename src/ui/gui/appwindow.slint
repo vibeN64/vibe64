@@ -134,7 +134,7 @@ export component AppWindow inherits Window {
     in-out property netplay_game_pal <=> NetplayWaitData.game_pal;
     in-out property netplay_connected_peers_count <=> NetplayWaitData.connected_peers_count;
 
-    // which sidebar page is showing, also settable from outside (VIBE64_PAGE)
+    // which sidebar page is showing, also settable from outside (VIBEN64_PAGE)
     in-out property current_page <=> side-bar.current-item;
     private property <string> popup_message;
     private property <bool> popup_has_close;
@@ -166,13 +166,13 @@ export component AppWindow inherits Window {
     min-height: 240px;
     preferred-width: 800px;
     preferred-height: 650px;
-    title: "Vibe64";
+    title: "VibeN64";
     background: Theme.page-background;
-    icon: @image-url("../../../data/icon/vibe64.png");
+    icon: @image-url("../../../data/icon/viben64.png");
 
     side-bar := SideBar {
         portrait: root.is-portrait;
-        title: "Vibe64";
+        title: "VibeN64";
         model: [
             {
                 icon: @image-url("../../../data/ui/icons/local_game.svg"),
