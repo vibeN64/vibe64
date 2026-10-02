@@ -63,6 +63,12 @@ brew install molten-vk
 open target/VibeN64.app
 ```
 
+To build a copy that other Macs will open, sign it with a Developer ID and have Apple notarise it:
+
+```
+SIGN_IDENTITY="Developer ID Application: Your Name (TEAMID)" NOTARY_PROFILE=your-notarytool-profile ./scripts/bundle-macos.sh
+```
+
 The script finds `llvm-ar` inside the Rust toolchain, so nothing beyond Xcode's command line tools and Rust is needed to compile. When building by hand with plain `cargo build`, set `AR` to that `llvm-ar` yourself; the script shows how.
 
 ### working on the interface

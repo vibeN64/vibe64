@@ -56,6 +56,29 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 </plist>
 PLIST
 
-# ad-hoc signature, enough to run on this Mac
-codesign --force --deep --entitlements data/macos/entitlements_dev.plist -s - "$APP"
+# Signing. Without SIGN_IDENTITY the app gets an ad-hoc signature, which is enough to
+# run on the Mac that built it. With a "Developer ID Application" identity it is signed
+# for distribution (hardened runtime), and NOTARY_PROFILE additionally sends it to Apple
+# for notarisation using that notarytool keychain profile.
+IDENTITY="${SIGN_IDENTITY:--}"
+if [ "$IDENTITY" = "-" ]; then
+  codesign --force --deep --entitlements data/macos/entitlements_dev.plist -s - "$APP"
+else
+  codesign --force --timestamp --options runtime -s "$IDENTITY" "$APP/Contents/Frameworks/libMoltenVK.dylib"
+  codesign --force --timestamp --options runtime -s "$IDENTITY" "$APP"
+  codesign --verify --strict --deep "$APP"
+fi
+
+if [ -n "${NOTARY_PROFILE:-}" ]; then
+  if [ "$IDENTITY" = "-" ]; then
+    echo "NOTARY_PROFILE needs SIGN_IDENTITY set to a Developer ID Application identity." >&2
+    exit 1
+  fi
+  ZIP=target/VibeN64-notarize.zip
+  ditto -c -k --keepParent "$APP" "$ZIP"
+  xcrun notarytool submit "$ZIP" --keychain-profile "$NOTARY_PROFILE" --wait
+  xcrun stapler staple "$APP"
+  rm -f "$ZIP"
+fi
+
 echo "Built $APP"
