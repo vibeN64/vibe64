@@ -249,6 +249,7 @@ fn controller_window(app: &AppWindow, config: &ui::config::Config) {
     ui::sdl_init(sdl3_sys::init::SDL_INIT_GAMEPAD);
 
     app.set_emulate_vru(config.input.emulate_vru);
+    app.set_power_off_controllers(config.input.power_off_controllers);
 
     app.set_controller_enabled(slint::ModelRc::from(std::rc::Rc::new(
         slint::VecModel::from(config.input.controller_enabled.to_vec()),
@@ -463,6 +464,7 @@ pub fn save_settings(app: &AppWindow) {
     config.video.upscale = upscale_values[app.get_resolution() as usize];
 
     config.input.emulate_vru = app.get_emulate_vru();
+    config.input.power_off_controllers = app.get_power_off_controllers();
     for (i, controller_enabled) in app.get_controller_enabled().iter().enumerate() {
         config.input.controller_enabled[i] = controller_enabled;
     }
@@ -565,6 +567,13 @@ pub fn app_window(
 
     app.run().unwrap();
     retroachievements::shutdown_client();
+
+    // The launcher quitting is the app closing. A game that is still running keeps its
+    // controllers, and so does one that was started on its own, without the launcher.
+    #[cfg(not(target_os = "android"))]
+    if app.get_power_off_controllers() && !app.get_game_running() {
+        ui::input::power_off_controllers();
+    }
 }
 
 pub fn run_rom(

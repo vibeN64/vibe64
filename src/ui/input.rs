@@ -696,6 +696,40 @@ pub fn init(ui: &mut ui::Ui) {
     }
 }
 
+/// Switches off the wireless Nintendo Switch controllers (the NSO N64 controller is one),
+/// the way a console does when it shuts down. Left alone they stay connected, lights on,
+/// until they give up by themselves.
+pub fn power_off_controllers() {
+    // The "set HCI state" subcommand with "disconnect". SDL's Switch driver sends a short
+    // effect to the controller as a subcommand, unchanged.
+    const POWER_OFF: [u8; 2] = [0x06, 0x00];
+
+    ui::sdl_init(sdl3_sys::init::SDL_INIT_GAMEPAD);
+    unsafe { sdl3_sys::events::SDL_PumpEvents() };
+    for joystick_id in list_joysticks() {
+        if !ui::input_profile::is_switch_controller(joystick_id) {
+            continue;
+        }
+        let gamepad = unsafe { sdl3_sys::gamepad::SDL_OpenGamepad(joystick_id) };
+        if gamepad.is_null() {
+            continue;
+        }
+        unsafe {
+            // over USB the same command would only put the controller to sleep
+            if sdl3_sys::gamepad::SDL_GetGamepadConnectionState(gamepad)
+                == sdl3_sys::joystick::SDL_JOYSTICK_CONNECTION_WIRELESS
+            {
+                sdl3_sys::gamepad::SDL_SendGamepadEffect(
+                    gamepad,
+                    POWER_OFF.as_ptr() as *const std::ffi::c_void,
+                    POWER_OFF.len() as i32,
+                );
+            }
+            sdl3_sys::gamepad::SDL_CloseGamepad(gamepad);
+        }
+    }
+}
+
 pub fn close(ui: &mut ui::Ui) {
     // A game can end while a pad is shaking. SDL's Switch driver holds back a "stop" that
     // comes within 30 ms of its last rumble packet and sends it on a later update, so
