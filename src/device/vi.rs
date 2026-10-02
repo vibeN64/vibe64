@@ -115,12 +115,23 @@ pub fn write_regs(device: &mut device::Device, address: u64, value: u32, mask: u
     ui::video::set_register(reg as u32, device.vi.regs[reg as usize])
 }
 
+/// The menu key where the menu cannot be opened, because the game must not be paused.
+/// In fullscreen it is the only way out without a keyboard shortcut, so it ends the game,
+/// as it did before there was a menu.
+fn leave_fullscreen_game(why_no_menu: &str) {
+    if ui::video::is_fullscreen() {
+        ui::input::push_user_event(ui::input::USER_EVENT_EXIT_GAME);
+    } else {
+        ui::video::onscreen_message(why_no_menu, ui::video::MESSAGE_LENGTH_MESSAGE_SHORT);
+    }
+}
+
 pub fn update_screen(device: &mut device::Device) {
     if !netplay::in_rollback(device.netplay.as_ref()) {
         ui::video::render_frame();
     }
 
-    let (speed_limiter_toggled, paused) = ui::video::check_callback(device);
+    let (speed_limiter_toggled, paused, open_menu) = ui::video::check_callback(device);
 
     if speed_limiter_toggled {
         reset_pace_deadline(device);
@@ -144,6 +155,16 @@ pub fn update_screen(device: &mut device::Device) {
 
     if device.netplay.is_some() {
         device.netplay.as_mut().unwrap().inputs = netplay::process_requests(device);
+        if open_menu {
+            leave_fullscreen_game("The menu cannot be used in netplay");
+        }
+    } else if open_menu {
+        if retroachievements::get_hardcore() {
+            leave_fullscreen_game("The menu cannot be used in RA hardcore mode");
+        } else {
+            ui::menu::run(device);
+            reset_pace_deadline(device);
+        }
     } else if paused {
         if retroachievements::get_hardcore() {
             ui::video::onscreen_message(
