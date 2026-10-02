@@ -147,10 +147,19 @@ fn main() {
         println!("cargo:rustc-link-lib=static=clang_rt.osx");
     }
 
-    volk_build.flag("-flto=thin");
-    rdp_build.flag("-flto=thin");
-    simd_build.flag("-flto=thin");
-    retroachievements_build.flag("-flto=thin");
+    // Cross-language LTO needs a clang built on the same LLVM as rustc. Apple's clang
+    // emits bitcode that rust-lld crashes on, so a stock Xcode toolchain skips it.
+    let clang_version = std::process::Command::new("clang")
+        .arg("--version")
+        .output()
+        .map(|output| String::from_utf8_lossy(&output.stdout).to_string())
+        .unwrap_or_default();
+    if !clang_version.contains("Apple clang") {
+        volk_build.flag("-flto=thin");
+        rdp_build.flag("-flto=thin");
+        simd_build.flag("-flto=thin");
+        retroachievements_build.flag("-flto=thin");
+    }
 
     volk_build.compile("volk");
     rdp_build.compile("parallel-rdp");
