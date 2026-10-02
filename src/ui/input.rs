@@ -328,6 +328,14 @@ fn handle_joystick_events(ui: &mut ui::Ui) {
                         {
                             controller.game_controller =
                                 unsafe { sdl3_sys::gamepad::SDL_OpenGamepad(joystick_id) };
+                            if !controller.game_controller.is_null() {
+                                unsafe {
+                                    sdl3_sys::gamepad::SDL_SetGamepadPlayerIndex(
+                                        controller.game_controller,
+                                        i as i32,
+                                    )
+                                };
+                            }
                         }
                     }
                 }
@@ -487,6 +495,31 @@ pub fn clear_bindings(config: &mut ui::config::Config) {
     }
 }
 
+/// The hidden system copy of an NSO N64 controller is found first and takes player slot
+/// one, which leaves the real pad showing two lights. Give the real pads the first slots.
+/// Once a game starts, the lights follow the port the pad is assigned to instead.
+fn claim_player_slots(joysticks: &[sdl3_sys::joystick::SDL_JoystickID]) {
+    for (slot, joystick_id) in joysticks
+        .iter()
+        .filter(|joystick| ui::input_profile::is_nso_n64_controller(**joystick))
+        .enumerate()
+    {
+        let slot = slot as i32;
+        let in_use = !unsafe { sdl3_sys::joystick::SDL_GetJoystickFromID(*joystick_id) }.is_null();
+        if !in_use
+            && unsafe { sdl3_sys::joystick::SDL_GetJoystickPlayerIndexForID(*joystick_id) } != slot
+        {
+            let joystick = unsafe { sdl3_sys::joystick::SDL_OpenJoystick(*joystick_id) };
+            if !joystick.is_null() {
+                unsafe {
+                    sdl3_sys::joystick::SDL_SetJoystickPlayerIndex(joystick, slot);
+                    sdl3_sys::joystick::SDL_CloseJoystick(joystick);
+                }
+            }
+        }
+    }
+}
+
 pub fn get_joysticks() -> Vec<sdl3_sys::joystick::SDL_JoystickID> {
     unsafe { sdl3_sys::events::SDL_PumpEvents() };
     let mut num_joysticks = 0;
@@ -504,6 +537,7 @@ pub fn get_joysticks() -> Vec<sdl3_sys::joystick::SDL_JoystickID> {
         {
             parts.retain(|joystick| !ui::input_profile::is_nso_n64_system_duplicate(*joystick));
         }
+        claim_player_slots(&parts);
         parts
     } else {
         eprintln!("Could not get joysticks");
@@ -579,6 +613,9 @@ pub fn init(ui: &mut ui::Ui) {
                             unsafe { sdl3_sys::gamepad::SDL_GetGamepadGUIDForID(joystick_id) };
                         ui.input.controllers[i].nso_n64 =
                             ui::input_profile::is_nso_n64_controller(joystick_id);
+                        // Player lights follow the N64 port the pad is plugged into,
+                        // not the order SDL happened to find the devices in.
+                        unsafe { sdl3_sys::gamepad::SDL_SetGamepadPlayerIndex(gamepad, i as i32) };
                     }
                 } else {
                     let joystick = unsafe { sdl3_sys::joystick::SDL_OpenJoystick(joystick_id) };

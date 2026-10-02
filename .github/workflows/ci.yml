@@ -17,6 +17,8 @@ concurrency:
 
 env:
   CARGO_TERM_COLOR: always
+  # must match scripts/bundle-macos.sh, so the lint step reuses the build's artifacts
+  MACOSX_DEPLOYMENT_TARGET: "15.0"
 
 jobs:
   build:

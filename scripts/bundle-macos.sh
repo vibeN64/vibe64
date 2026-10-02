@@ -11,6 +11,11 @@ HOST=$(rustc -vV | sed -n 's/^host: //p')
 # .cargo/config.toml asks for llvm-ar, which is not on PATH with a stock Xcode setup
 export AR="${AR:-$HOME/.rustup/toolchains/$TOOLCHAIN-$HOST/lib/rustlib/$HOST/bin/llvm-ar}"
 
+# The oldest macOS the app runs on. It has to be set for the build as well as in
+# Info.plist: without it the C and C++ parts target the build machine's own macOS, and
+# the linker warns about every object being newer than the Rust target minimum.
+export MACOSX_DEPLOYMENT_TARGET="${MACOSX_DEPLOYMENT_TARGET:-15.0}"
+
 MOLTENVK="${MOLTENVK_DYLIB:-/opt/homebrew/opt/molten-vk/lib/libMoltenVK.dylib}"
 if [ ! -f "$MOLTENVK" ]; then
   echo "libMoltenVK.dylib not found at $MOLTENVK" >&2
@@ -50,7 +55,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
   <key>CFBundleShortVersionString</key><string>$VERSION</string>
   <key>CFBundleVersion</key><string>$(date +%Y%m%d.%H%M%S)</string>
   <key>LSApplicationCategoryType</key><string>public.app-category.games</string>
-  <key>LSMinimumSystemVersion</key><string>15.0</string>
+  <key>LSMinimumSystemVersion</key><string>$MACOSX_DEPLOYMENT_TARGET</string>
   <key>NSHighResolutionCapable</key><true/>
 </dict>
 </plist>
