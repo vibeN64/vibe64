@@ -224,6 +224,8 @@ fn set_buttons(
 }
 
 pub fn set_rumble(ui: &ui::Ui, channel: usize, rumble: u8) {
+    // switched off: a game's request is not passed on, but stopping still is
+    let rumble = if ui.config.input.rumble { rumble } else { 0 };
     let controller = ui.input.controllers[channel].game_controller;
     let joystick = ui.input.controllers[channel].joystick;
     if !controller.is_null() {
@@ -383,6 +385,100 @@ fn open_controller(
         unsafe { sdl3_sys::joystick::SDL_GetJoystickGUIDForID(joystick_id) };
     println!("Player {} uses {}", port + 1, joystick_name(joystick_id));
     true
+}
+
+/// The joystick a port has open, if any
+fn port_joystick_id(controller: &Controllers) -> Option<sdl3_sys::joystick::SDL_JoystickID> {
+    let id = if !controller.game_controller.is_null() {
+        unsafe { sdl3_sys::gamepad::SDL_GetGamepadID(controller.game_controller) }
+    } else if !controller.joystick.is_null() {
+        unsafe { sdl3_sys::joystick::SDL_GetJoystickID(controller.joystick) }
+    } else {
+        return None;
+    };
+    (u32::from(id) != 0).then_some(id)
+}
+
+fn close_port(ui: &mut ui::Ui, port: usize) {
+    let controller = &mut ui.input.controllers[port];
+    if !controller.joystick.is_null() {
+        unsafe { sdl3_sys::joystick::SDL_CloseJoystick(controller.joystick) };
+        controller.joystick = std::ptr::null_mut();
+    }
+    if !controller.game_controller.is_null() {
+        unsafe { sdl3_sys::gamepad::SDL_CloseGamepad(controller.game_controller) };
+        controller.game_controller = std::ptr::null_mut();
+    }
+    controller.nso_n64 = false;
+}
+
+/// The pad a port is using, for the in-game menu
+pub fn port_pad_id(ui: &ui::Ui, port: usize) -> Option<sdl3_sys::joystick::SDL_JoystickID> {
+    port_joystick_id(&ui.input.controllers[port])
+}
+
+pub fn port_pad_name(ui: &ui::Ui, port: usize) -> Option<String> {
+    port_pad_id(ui, port).map(joystick_name)
+}
+
+/// The connected pads that can be given to a port, with their names
+pub fn pads_for_port(
+    ui: &ui::Ui,
+    port: usize,
+) -> Vec<(sdl3_sys::joystick::SDL_JoystickID, String)> {
+    unsafe { sdl3_sys::events::SDL_PumpEvents() };
+    list_joysticks()
+        .into_iter()
+        .filter(|id| port_uses_dinput(ui, port) || unsafe { sdl3_sys::gamepad::SDL_IsGamepad(*id) })
+        .map(|id| (id, joystick_name(id)))
+        .collect()
+}
+
+fn remember_assignment(
+    ui: &mut ui::Ui,
+    port: usize,
+    joystick_id: sdl3_sys::joystick::SDL_JoystickID,
+) {
+    ui.config.input.controller_assignment[port] = joystick_path(joystick_id);
+}
+
+/// Gives a pad to a port while a game is running. A pad is in one port at a time, so a
+/// port that had it swaps with this one. The choice is saved with the other settings.
+pub fn assign_pad(ui: &mut ui::Ui, port: usize, joystick_id: sdl3_sys::joystick::SDL_JoystickID) {
+    let previous = port_joystick_id(&ui.input.controllers[port]);
+    if previous == Some(joystick_id) {
+        return;
+    }
+    for other in 0..ui.input.controllers.len() {
+        if other != port && port_joystick_id(&ui.input.controllers[other]) == Some(joystick_id) {
+            close_port(ui, other);
+            if let Some(previous) = previous
+                && open_controller(ui, other, previous)
+            {
+                remember_assignment(ui, other, previous);
+            } else {
+                ui.config.input.controller_assignment[other] = None;
+            }
+        }
+    }
+    close_port(ui, port);
+    if open_controller(ui, port, joystick_id) {
+        remember_assignment(ui, port, joystick_id);
+    }
+}
+
+/// Changes a port's input profile while a game is running. A profile that reads raw
+/// joysticks needs the pad opened differently from one that reads gamepads, so the pad
+/// is opened again when that changes.
+pub fn set_profile(ui: &mut ui::Ui, port: usize, profile: &str) {
+    let was_dinput = port_uses_dinput(ui, port);
+    ui.config.input.input_profile_binding[port] = profile.to_string();
+    if port_uses_dinput(ui, port) != was_dinput
+        && let Some(joystick_id) = port_joystick_id(&ui.input.controllers[port])
+    {
+        close_port(ui, port);
+        open_controller(ui, port, joystick_id);
+    }
 }
 
 /// A pad was switched on or plugged in while a game is running

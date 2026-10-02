@@ -48,6 +48,9 @@ pub struct Input {
     /// Switch wireless Nintendo Switch controllers off when the app quits
     #[serde(default = "default_true")]
     pub power_off_controllers: bool,
+    /// Shake the controllers when a game asks for rumble
+    #[serde(default = "default_true")]
+    pub rumble: bool,
 }
 
 fn default_true() -> bool {
@@ -206,6 +209,7 @@ impl Config {
                 gb_ram_path: [String::new(), String::new(), String::new(), String::new()],
                 emulate_vru: false,
                 power_off_controllers: true,
+                rumble: true,
             }),
             video: Video {
                 upscale: 1,
