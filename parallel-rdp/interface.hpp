@@ -38,6 +38,7 @@ typedef struct {
   bool increase_input_delay;
   bool paused;
   bool frame_advance;
+  bool open_menu;
   uint32_t save_state_slot;
 } CALL_BACK;
 
@@ -69,6 +70,14 @@ void rdp_load_state(GFX_INFO _gfx_info, const uint8_t *state);
 void rdp_set_fps(uint32_t fps, uint32_t vis);
 
 JoystickEvent get_joystick_event();
+
+// The in-game menu (see src/ui/menu.rs, which owns what it shows and does)
+void rdp_menu_show(const char *title, const char *const *items, uint32_t count,
+                   uint32_t selected, const char *hint);
+void rdp_menu_hide();
+void rdp_toggle_fullscreen();
+bool rdp_is_fullscreen();
+void rdp_set_save_state_slot(uint32_t slot);
 
 void achievement_challenge_indicator_add(const char *achievement_title);
 void achievement_challenge_indicator_remove(const char *achievement_title);

@@ -2,8 +2,16 @@ use std::ops::Neg;
 
 use crate::ui;
 
-const X_AXIS_SHIFT: usize = 16;
-const Y_AXIS_SHIFT: usize = 24;
+pub const X_AXIS_SHIFT: usize = 16;
+pub const Y_AXIS_SHIFT: usize = 24;
+
+// Codes of the SDL user events that hotkeys send to the video code (see sdl_event_filter)
+const USER_EVENT_SAVE_STATE: i32 = 1;
+const USER_EVENT_LOAD_STATE: i32 = 2;
+pub const USER_EVENT_EXIT_GAME: i32 = 3;
+pub const USER_EVENT_FAST_FORWARD: i32 = 4;
+const USER_EVENT_LOAD_REWIND: i32 = 5;
+const USER_EVENT_OPEN_MENU: i32 = 6;
 
 const MAX_AXIS_VALUE: f64 = 85.0;
 
@@ -462,38 +470,29 @@ fn handle_joystick_events(ui: &mut ui::Ui) {
     }
 }
 
-fn handle_hotkeys(keys: u32, last_key_state: u32) {
+pub fn push_user_event(code: i32) {
     let mut event: sdl3_sys::events::SDL_Event = Default::default();
     event.user.r#type = u32::from(sdl3_sys::events::SDL_EVENT_USER);
-    if keys & (1 << ui::input_profile::L_TRIG) != 0
-        && last_key_state & (1 << ui::input_profile::L_TRIG) == 0
-    {
-        event.user.code = 1; //save state
-        unsafe { sdl3_sys::events::SDL_PushEvent(&mut event) };
+    event.user.code = code;
+    unsafe { sdl3_sys::events::SDL_PushEvent(&mut event) };
+}
+
+fn handle_hotkeys(keys: u32, last_key_state: u32) {
+    let pressed = |button: usize| keys & (1 << button) != 0 && last_key_state & (1 << button) == 0;
+    if pressed(ui::input_profile::L_TRIG) {
+        push_user_event(USER_EVENT_SAVE_STATE);
     }
-    if keys & (1 << ui::input_profile::R_TRIG) != 0
-        && last_key_state & (1 << ui::input_profile::R_TRIG) == 0
-    {
-        event.user.code = 2; //load state
-        unsafe { sdl3_sys::events::SDL_PushEvent(&mut event) };
+    if pressed(ui::input_profile::R_TRIG) {
+        push_user_event(USER_EVENT_LOAD_STATE);
     }
-    if keys & (1 << ui::input_profile::START_BUTTON) != 0
-        && last_key_state & (1 << ui::input_profile::START_BUTTON) == 0
-    {
-        event.user.code = 3; //exit game
-        unsafe { sdl3_sys::events::SDL_PushEvent(&mut event) };
+    if pressed(ui::input_profile::START_BUTTON) {
+        push_user_event(USER_EVENT_OPEN_MENU);
     }
-    if keys & (1 << ui::input_profile::Z_TRIG) != 0
-        && last_key_state & (1 << ui::input_profile::Z_TRIG) == 0
-    {
-        event.user.code = 4; //fast forward
-        unsafe { sdl3_sys::events::SDL_PushEvent(&mut event) };
+    if pressed(ui::input_profile::Z_TRIG) {
+        push_user_event(USER_EVENT_FAST_FORWARD);
     }
-    if keys & (1 << ui::input_profile::L_CBUTTON) != 0
-        && last_key_state & (1 << ui::input_profile::L_CBUTTON) == 0
-    {
-        event.user.code = 5; //load rewind
-        unsafe { sdl3_sys::events::SDL_PushEvent(&mut event) };
+    if pressed(ui::input_profile::L_CBUTTON) {
+        push_user_event(USER_EVENT_LOAD_REWIND);
     }
 }
 

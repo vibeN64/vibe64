@@ -7,6 +7,7 @@
 #include "wsi_platform.hpp"
 #include <SDL3/SDL_vulkan.h>
 #include <SDL3_ttf/SDL_ttf.h>
+#include <algorithm>
 #include <cmath>
 #include <map>
 
@@ -67,6 +68,7 @@ enum user_event_codes {
   USER_EVENT_EXIT_GAME = 3,
   USER_EVENT_FAST_FORWARD = 4,
   USER_EVENT_LOAD_REWIND = 5,
+  USER_EVENT_OPEN_MENU = 6,
 };
 
 typedef struct {
@@ -138,6 +140,18 @@ static Vulkan::ImageHandle fps_image;
 static std::queue<JoystickEvent> joystick_events;
 
 typedef struct {
+  std::string title;
+  std::vector<std::string> items;
+  uint32_t selected;
+  std::string hint;
+} Menu;
+
+static bool menu_visible;
+static Menu menu;
+static Vulkan::ImageHandle menu_image;
+static TTF_Font *menu_font;
+
+typedef struct {
   float SourceSize[4];
   float OutputSize[4];
 } Push;
@@ -169,6 +183,7 @@ bool sdl_event_filter(void *userdata, SDL_Event *event) {
       TTF_SetFontSize(message_font,
                       message_font_size * SDL_GetWindowDisplayScale(window));
     }
+    menu_image = Vulkan::ImageHandle(); // redrawn to suit the new size
     if (achievement_challenge_indicator_font) {
       TTF_SetFontSize(achievement_challenge_indicator_font,
                       achievement_challenge_indicator_font_size *
@@ -183,8 +198,7 @@ bool sdl_event_filter(void *userdata, SDL_Event *event) {
     switch (event->key.scancode) {
     case SDL_SCANCODE_RETURN:
       if (event->key.mod & SDL_KMOD_ALT) {
-        gfx_info.fullscreen = !gfx_info.fullscreen;
-        SDL_SetWindowFullscreen(window, gfx_info.fullscreen);
+        rdp_toggle_fullscreen();
       }
       break;
     case SDL_SCANCODE_F:
@@ -202,12 +216,9 @@ bool sdl_event_filter(void *userdata, SDL_Event *event) {
       break;
     case SDL_SCANCODE_AC_BACK:
     case SDL_SCANCODE_ESCAPE:
-      if (gfx_info.fullscreen) {
-        SDL_zero(user_event);
-        user_event.type = SDL_EVENT_USER;
-        user_event.user.code = USER_EVENT_EXIT_GAME;
-        SDL_PushEvent(&user_event);
-      }
+      // Opens the in-game menu, or closes it. Where the menu cannot be used,
+      // this still leaves a fullscreen game (see update_screen in vi.rs).
+      callback.open_menu = true;
       break;
     case SDL_SCANCODE_F1:
       display_fps = !display_fps;
@@ -302,6 +313,9 @@ bool sdl_event_filter(void *userdata, SDL_Event *event) {
     case USER_EVENT_FAST_FORWARD:
       callback.enable_speedlimiter = !callback.enable_speedlimiter;
       break;
+    case USER_EVENT_OPEN_MENU:
+      callback.open_menu = true;
+      break;
     default:
       break;
     }
@@ -395,6 +409,119 @@ static ImageHandle create_message_image(Vulkan::Device &device, int width,
   return handle;
 }
 
+// The whole menu is drawn into one image: a dark panel with a title, one row per item
+// (the selected one highlighted) and a line of help underneath.
+static ImageHandle create_menu_image(Vulkan::Device &device) {
+  // The text follows the size of the window, within limits, so that the menu is
+  // neither cramped in a small window nor tiny in fullscreen.
+  const float scale = SDL_GetWindowDisplayScale(window);
+  int window_width, window_height;
+  SDL_GetWindowSizeInPixels(window, &window_width, &window_height);
+  const float text_size =
+      std::clamp(window_height / 30.0f, 13.0f * scale, 22.0f * scale);
+  const int pad_x = int(text_size * 1.1f);
+  const int pad_y = int(text_size * 0.4f);
+  const int margin = int(text_size * 0.7f);
+  const int border = std::max(1, int(2 * scale));
+  const SDL_Color white = {255, 255, 255, 255};
+  const SDL_Color muted = {168, 168, 186, 255};
+
+  TTF_SetFontSize(menu_font, text_size * 0.62f);
+  SDL_Surface *hint =
+      TTF_RenderText_Blended(menu_font, menu.hint.c_str(), 0, muted);
+  TTF_SetFontSize(menu_font, text_size);
+  SDL_Surface *title =
+      TTF_RenderText_Blended(menu_font, menu.title.c_str(), 0, muted);
+  std::vector<SDL_Surface *> rows;
+  for (const std::string &item : menu.items) {
+    rows.push_back(TTF_RenderText_Blended(menu_font, item.c_str(), 0, white));
+  }
+
+  int text_width = std::max(title ? title->w : 0, hint ? hint->w : 0);
+  for (SDL_Surface *row : rows) {
+    if (row)
+      text_width = std::max(text_width, row->w);
+  }
+  const int row_height = TTF_GetFontHeight(menu_font) + 2 * pad_y;
+  const int width = text_width + 2 * pad_x + 2 * margin;
+  const int height = margin + (title ? title->h : 0) + margin +
+                     row_height * int(rows.size()) + margin +
+                     (hint ? hint->h : 0) + margin;
+
+  SDL_Surface *surface =
+      SDL_CreateSurface(width, height, SDL_PIXELFORMAT_ARGB8888);
+  const SDL_PixelFormatDetails *format =
+      SDL_GetPixelFormatDetails(surface->format);
+  SDL_FillSurfaceRect(surface, nullptr,
+                      SDL_MapRGBA(format, nullptr, 96, 72, 160, 255));
+  SDL_Rect panel = {border, border, width - 2 * border, height - 2 * border};
+  SDL_FillSurfaceRect(surface, &panel,
+                      SDL_MapRGBA(format, nullptr, 22, 22, 30, 255));
+
+  int y = margin;
+  if (title) {
+    SDL_Rect dst = {margin + pad_x, y, title->w, title->h};
+    SDL_BlitSurface(title, nullptr, surface, &dst);
+    y += title->h;
+    SDL_DestroySurface(title);
+  }
+  y += margin;
+  for (size_t i = 0; i < rows.size(); ++i) {
+    if (i == menu.selected) {
+      SDL_Rect highlight = {margin, y, width - 2 * margin, row_height};
+      SDL_FillSurfaceRect(surface, &highlight,
+                          SDL_MapRGBA(format, nullptr, 124, 58, 237, 255));
+    }
+    if (rows[i]) {
+      SDL_Rect dst = {margin + pad_x, y + pad_y, rows[i]->w, rows[i]->h};
+      SDL_BlitSurface(rows[i], nullptr, surface, &dst);
+      SDL_DestroySurface(rows[i]);
+    }
+    y += row_height;
+  }
+  y += margin;
+  if (hint) {
+    SDL_Rect dst = {margin + pad_x, y, hint->w, hint->h};
+    SDL_BlitSurface(hint, nullptr, surface, &dst);
+    SDL_DestroySurface(hint);
+  }
+
+  ImageCreateInfo info = ImageCreateInfo::immutable_2d_image(
+      surface->w, surface->h, VK_FORMAT_B8G8R8A8_UNORM, false);
+  ImageInitialData initial_data = {};
+  initial_data.data = surface->pixels;
+  initial_data.row_length = surface->pitch / 4;
+  initial_data.image_height = surface->h;
+
+  ImageHandle handle = device.create_image(info, &initial_data);
+  SDL_DestroySurface(surface);
+  return handle;
+}
+
+void rdp_menu_show(const char *title, const char *const *items, uint32_t count,
+                   uint32_t selected, const char *hint) {
+  menu.title = title;
+  menu.items.assign(items, items + count);
+  menu.selected = selected;
+  menu.hint = hint;
+  menu_visible = true;
+  menu_image = Vulkan::ImageHandle();
+}
+
+void rdp_menu_hide() {
+  menu_visible = false;
+  menu_image = Vulkan::ImageHandle();
+}
+
+void rdp_toggle_fullscreen() {
+  gfx_info.fullscreen = !gfx_info.fullscreen;
+  SDL_SetWindowFullscreen(window, gfx_info.fullscreen);
+}
+
+bool rdp_is_fullscreen() { return gfx_info.fullscreen; }
+
+void rdp_set_save_state_slot(uint32_t slot) { callback.save_state_slot = slot; }
+
 void rdp_init(void *_window, GFX_INFO _gfx_info, const void *font,
               size_t font_size, uint32_t save_state_slot) {
   memset(&rdp_device, 0, sizeof(RDP_DEVICE));
@@ -464,7 +591,9 @@ void rdp_init(void *_window, GFX_INFO _gfx_info, const void *font,
       TTF_OpenFontIO(SDL_IOFromConstMem(font, font_size), true,
                      achievement_challenge_indicator_font_size *
                          SDL_GetWindowDisplayScale(window));
-  if (!message_font || !achievement_challenge_indicator_font) {
+  menu_font = TTF_OpenFontIO(SDL_IOFromConstMem(font, font_size), true,
+                             message_font_size);
+  if (!message_font || !achievement_challenge_indicator_font || !menu_font) {
     rdp_close();
     return;
   }
@@ -478,6 +607,8 @@ void rdp_init(void *_window, GFX_INFO _gfx_info, const void *font,
   crop_letterbox = false;
 
   messages = std::queue<Message>();
+  menu_visible = false;
+  menu_image = Vulkan::ImageHandle();
 
   display_challenge_indicator = true;
   achievement_challenge_indicators.clear();
@@ -495,6 +626,8 @@ void rdp_close() {
   g_hidden_rdram = nullptr;
 
   messages = std::queue<Message>();
+  menu_visible = false;
+  menu_image = Vulkan::ImageHandle();
   achievement_challenge_indicator_image = Vulkan::ImageHandle();
   achievement_progress_indicator_image = Vulkan::ImageHandle();
   fps_image = Vulkan::ImageHandle();
@@ -509,6 +642,10 @@ void rdp_close() {
   if (achievement_challenge_indicator_font) {
     TTF_CloseFont(achievement_challenge_indicator_font);
     achievement_challenge_indicator_font = nullptr;
+  }
+  if (menu_font) {
+    TTF_CloseFont(menu_font);
+    menu_font = nullptr;
   }
   if (processor) {
     delete processor;
@@ -663,6 +800,7 @@ static void render_frame(Vulkan::Device &device) {
     cmd->set_cull_mode(VK_CULL_MODE_NONE);
 
     VkViewport vp = cmd->get_viewport();
+    const VkViewport screen = vp;
     // If we don't have an image, we just get a cleared screen in the render
     // pass.
     if (image) {
@@ -714,6 +852,24 @@ static void render_frame(Vulkan::Device &device) {
       draw_fps(cmd, vp);
     }
 
+    if (menu_visible) {
+      if (!menu_image)
+        menu_image = create_menu_image(device);
+      // centred, and shrunk if the window is smaller than the menu
+      float fit = std::min({1.0f, screen.width / menu_image->get_width(),
+                            screen.height / menu_image->get_height()});
+      VkViewport menu_vp = screen;
+      menu_vp.width = floor(menu_image->get_width() * fit);
+      menu_vp.height = floor(menu_image->get_height() * fit);
+      menu_vp.x = floor(screen.x + (screen.width - menu_vp.width) / 2);
+      menu_vp.y = floor(screen.y + (screen.height - menu_vp.height) / 2);
+      cmd->set_texture(0, 0, menu_image->get_view(),
+                       fit < 1.0f ? Vulkan::StockSampler::LinearClamp
+                                  : Vulkan::StockSampler::NearestClamp);
+      cmd->set_viewport(menu_vp);
+      cmd->draw(3);
+    }
+
     cmd->end_render_pass();
   }
   device.submit(cmd);
@@ -750,6 +906,7 @@ CALL_BACK rdp_check_callback() {
   callback.decrease_input_delay = false;
   callback.increase_input_delay = false;
   callback.frame_advance = false;
+  callback.open_menu = false;
   return return_value;
 }
 

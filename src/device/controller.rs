@@ -64,17 +64,7 @@ pub fn process(device: &mut device::Device, channel: usize) {
 
             device.pif.ram[offset..offset + 4].copy_from_slice(&input.data.to_ne_bytes());
             if input.pak_change_pressed {
-                // pak change button pressed
-                if device::events::get_event(device, device::events::EVENT_TYPE_PAK).is_none() {
-                    device.pif.channels[channel].change_pak =
-                        device.pif.channels[channel].pak_handler.unwrap().pak_type;
-                    device.pif.channels[channel].pak_handler = None;
-                    device::events::create_event(
-                        device,
-                        device::events::EVENT_TYPE_PAK,
-                        device.cpu.clock_rate / 2, // 500ms
-                    )
-                }
+                request_pak_change(device, channel);
             }
         }
         JCMD_PAK_READ => pak_read_block(
@@ -92,6 +82,22 @@ pub fn process(device: &mut device::Device, channel: usize) {
             channel,
         ),
         _ => eprintln!("unknown controller command {cmd}"),
+    }
+}
+
+/// Takes the pak out of a controller. Half a second later the next kind of pak goes in
+/// (see pak_switch_event), which is long enough for a game to notice the change.
+pub fn request_pak_change(device: &mut device::Device, channel: usize) {
+    if device::events::get_event(device, device::events::EVENT_TYPE_PAK).is_none()
+        && let Some(handler) = device.pif.channels[channel].pak_handler
+    {
+        device.pif.channels[channel].change_pak = handler.pak_type;
+        device.pif.channels[channel].pak_handler = None;
+        device::events::create_event(
+            device,
+            device::events::EVENT_TYPE_PAK,
+            device.cpu.clock_rate / 2, // 500ms
+        )
     }
 }
 

@@ -197,7 +197,69 @@ pub fn pause_loop(ui: &mut ui::Ui, frame_time: f64) {
     }
 }
 
-pub fn check_callback(device: &mut device::Device) -> (bool, bool) {
+pub fn reset_game(device: &mut device::Device) {
+    device.cpu.cop0.regs[device::cop0::COP0_CAUSE_REG] |= device::cop0::COP0_CAUSE_IP4;
+    device.cpu.cop0.regs[device::cop0::COP0_CAUSE_REG] &= !device::cop0::COP0_CAUSE_EXCCODE_MASK;
+
+    device::events::create_event(
+        device,
+        device::events::EVENT_TYPE_NMI,
+        device.cpu.clock_rate, // 1 second
+    );
+}
+
+pub fn set_save_state_slot(device: &mut device::Device, slot: u32) {
+    unsafe { rdp_set_save_state_slot(slot) };
+    device.ui.storage.save_state_slot = slot;
+    device
+        .ui
+        .storage
+        .paths
+        .savestate_file_path
+        .set_extension(format!("state{slot}"));
+}
+
+pub fn show_menu(title: &str, items: &[String], selected: usize, hint: &str) {
+    let title = std::ffi::CString::new(title).unwrap();
+    let hint = std::ffi::CString::new(hint).unwrap();
+    let items: Vec<std::ffi::CString> = items
+        .iter()
+        .map(|item| std::ffi::CString::new(item.as_str()).unwrap())
+        .collect();
+    let pointers: Vec<*const std::ffi::c_char> = items.iter().map(|item| item.as_ptr()).collect();
+    unsafe {
+        rdp_menu_show(
+            title.as_ptr(),
+            pointers.as_ptr(),
+            pointers.len() as u32,
+            selected as u32,
+            hint.as_ptr(),
+        )
+    }
+}
+
+pub fn hide_menu() {
+    unsafe { rdp_menu_hide() }
+}
+
+/// For the menu loop: whether the game is still wanted (its window was not closed), and
+/// whether the menu key was pressed again. Other hotkeys pressed meanwhile are dropped.
+pub fn poll_menu() -> (bool, bool) {
+    let callback = unsafe { rdp_check_callback() };
+    (callback.emu_running, callback.open_menu)
+}
+
+pub fn toggle_fullscreen() {
+    unsafe { rdp_toggle_fullscreen() }
+}
+
+pub fn is_fullscreen() -> bool {
+    unsafe { rdp_is_fullscreen() }
+}
+
+/// Returns whether the speed limiter was toggled, whether the game is paused, and whether
+/// the in-game menu was asked for.
+pub fn check_callback(device: &mut device::Device) -> (bool, bool, bool) {
     let mut speed_limiter_toggled = false;
     let callback = unsafe { rdp_check_callback() };
     device.cpu.running = callback.emu_running;
@@ -211,15 +273,7 @@ pub fn check_callback(device: &mut device::Device) -> (bool, bool) {
             device.savestate.load_rewind = true;
         }
         if callback.reset_game {
-            device.cpu.cop0.regs[device::cop0::COP0_CAUSE_REG] |= device::cop0::COP0_CAUSE_IP4;
-            device.cpu.cop0.regs[device::cop0::COP0_CAUSE_REG] &=
-                !device::cop0::COP0_CAUSE_EXCCODE_MASK;
-
-            device::events::create_event(
-                device,
-                device::events::EVENT_TYPE_NMI,
-                device.cpu.clock_rate, // 1 second
-            );
+            reset_game(device);
         }
         if device.speed_limiter.enabled != callback.enable_speedlimiter {
             speed_limiter_toggled = true;
@@ -232,13 +286,7 @@ pub fn check_callback(device: &mut device::Device) -> (bool, bool) {
             &format!("Switching savestate slot to {}", callback.save_state_slot),
             ui::video::MESSAGE_LENGTH_MESSAGE_VERY_SHORT,
         );
-        device.ui.storage.save_state_slot = callback.save_state_slot;
-        device
-            .ui
-            .storage
-            .paths
-            .savestate_file_path
-            .set_extension(format!("state{}", callback.save_state_slot));
+        set_save_state_slot(device, callback.save_state_slot);
     }
     if callback.lower_volume {
         ui::audio::lower_audio_volume(&mut device.ui);
@@ -255,7 +303,7 @@ pub fn check_callback(device: &mut device::Device) -> (bool, bool) {
             netplay::send_input_delay(netplay, netplay.input_delay + 1);
         }
     }
-    (speed_limiter_toggled, callback.paused)
+    (speed_limiter_toggled, callback.paused, callback.open_menu)
 }
 
 pub fn set_register(reg: u32, value: u32) {
