@@ -18,7 +18,7 @@ pub mod video;
 #[cfg(all(feature = "gui", not(target_os = "android")))]
 pub mod vru;
 
-pub const APP_ID: &str = "io.github.abarbarich.vibe64";
+pub const APP_ID: &str = "io.github.viben64.vibe64";
 
 pub fn install_default_crypto_provider() {
     if rustls::crypto::CryptoProvider::get_default().is_none() {

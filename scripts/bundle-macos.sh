@@ -42,7 +42,7 @@ cat > "$APP/Contents/Info.plist" <<PLIST
 <dict>
   <key>CFBundleName</key><string>Vibe64</string>
   <key>CFBundleDisplayName</key><string>Vibe64</string>
-  <key>CFBundleIdentifier</key><string>io.github.abarbarich.vibe64</string>
+  <key>CFBundleIdentifier</key><string>io.github.viben64.vibe64</string>
   <key>CFBundleExecutable</key><string>vibe64</string>
   <key>CFBundleIconFile</key><string>vibe64.icns</string>
   <key>CFBundlePackageType</key><string>APPL</string>

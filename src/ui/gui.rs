@@ -28,7 +28,7 @@ pub struct NetplayDevice {
 
 fn check_latest_version(weak: slint::Weak<AppWindow>) {
     let task = ui::WEB_CLIENT
-        .get("https://api.github.com/repos/abarbarich/vibe64/releases/latest")
+        .get("https://api.github.com/repos/vibeN64/vibe64/releases/latest")
         .send();
     tokio::spawn(async move {
         let response = task.await;
@@ -500,13 +500,13 @@ fn about_window(app: &AppWindow) {
         open_uri("https://github.com/gopher64/gopher64/wiki");
     });
     app.on_discord_button_clicked(move || {
-        open_uri("https://github.com/abarbarich/vibe64/issues");
+        open_uri("https://github.com/vibeN64/vibe64/issues");
     });
     app.on_source_code_button_clicked(move || {
-        open_uri("https://github.com/abarbarich/vibe64");
+        open_uri("https://github.com/vibeN64/vibe64");
     });
     app.on_newversion_button_clicked(move || {
-        open_uri("https://github.com/abarbarich/vibe64/releases/latest");
+        open_uri("https://github.com/vibeN64/vibe64/releases/latest");
     });
     app.set_version(format!("Version: {}", env!("GIT_DESCRIBE")).into());
 

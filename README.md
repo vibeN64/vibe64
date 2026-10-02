@@ -6,7 +6,7 @@ The fork exists for one reason: Gopher64 does not accept AI-assisted contributio
 
 Vibe64 is not affiliated with or endorsed by the Gopher64 project.
 
-- Please report Vibe64 problems [here](https://github.com/abarbarich/vibe64/issues), not upstream.
+- Please report Vibe64 problems [here](https://github.com/vibeN64/vibe64/issues), not upstream.
 - Please do not send Vibe64 changes to Gopher64 as pull requests. Their policy forbids it.
 
 ## what is different from Gopher64
@@ -44,7 +44,7 @@ If you would like to keep all the game data in the same folder as the executable
 
 1. [Install dependencies](#build-dependencies)
 2. [Install rust](https://www.rust-lang.org/tools/install)
-3. `git clone --recursive https://github.com/abarbarich/vibe64.git`
+3. `git clone --recursive https://github.com/vibeN64/vibe64.git`
 4. `cd vibe64`
 5. `git submodule update --init --recursive`
 6. `cargo build --release`

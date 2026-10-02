@@ -73,7 +73,7 @@ strip = false
 
 [package.metadata.bundle]
 name = "Vibe64"
-identifier = "io.github.abarbarich.vibe64"
+identifier = "io.github.viben64.vibe64"
 category = "public.app-category.games"
 icon = ["data/icon/vibe64_128x128.png","data/icon/vibe64_256x256.png","data/icon/vibe64_512x512.png"]
 
