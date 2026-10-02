@@ -941,6 +941,20 @@ pub fn is_nso_n64_controller(joystick_id: sdl3_sys::joystick::SDL_JoystickID) ->
     }
 }
 
+/// A controller that SDL's Nintendo Switch driver talks to: Pro Controller, Joy-Cons and
+/// the Switch Online pads.
+pub fn is_switch_controller(joystick_id: sdl3_sys::joystick::SDL_JoystickID) -> bool {
+    if unsafe { sdl3_sys::joystick::SDL_GetJoystickVendorForID(joystick_id) } != NINTENDO_VENDOR_ID
+    {
+        return false;
+    }
+    let gamepad_type = unsafe { sdl3_sys::gamepad::SDL_GetGamepadTypeForID(joystick_id) };
+    is_nso_n64_controller(joystick_id)
+        || gamepad_type == sdl3_sys::gamepad::SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_PRO
+        || gamepad_type == sdl3_sys::gamepad::SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_LEFT
+        || gamepad_type == sdl3_sys::gamepad::SDL_GAMEPAD_TYPE_NINTENDO_SWITCH_JOYCON_RIGHT
+}
+
 /// The second, incomplete copy of the NSO N64 controller that macOS's GameController
 /// framework exposes: an Apple vendor ID and no C buttons.
 pub fn is_nso_n64_system_duplicate(joystick_id: sdl3_sys::joystick::SDL_JoystickID) -> bool {

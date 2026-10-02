@@ -45,6 +45,13 @@ pub struct Input {
     pub gb_rom_path: [String; 4],
     pub gb_ram_path: [String; 4],
     pub emulate_vru: bool,
+    /// Switch wireless Nintendo Switch controllers off when the app quits
+    #[serde(default = "default_true")]
+    pub power_off_controllers: bool,
+}
+
+fn default_true() -> bool {
+    true
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -198,6 +205,7 @@ impl Config {
                 gb_rom_path: [String::new(), String::new(), String::new(), String::new()],
                 gb_ram_path: [String::new(), String::new(), String::new(), String::new()],
                 emulate_vru: false,
+                power_off_controllers: true,
             }),
             video: Video {
                 upscale: 1,

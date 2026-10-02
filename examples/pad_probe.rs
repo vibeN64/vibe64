@@ -1,9 +1,11 @@
 //! Prints what SDL reports for a connected gamepad: its name, IDs, mapping string, and
 //! every button press and large axis movement. Used to check input profiles against a
 //! real controller. With "rumble" after the seconds, every button press also shakes the
-//! pad for half a second, to check that SDL can drive its motor.
+//! pad for half a second, to check that SDL can drive its motor. With "off" instead, a
+//! Nintendo Switch controller is switched off as soon as it is found, which is what the
+//! launcher does when it quits.
 //!
-//!     cargo run --release --example pad_probe -- [seconds] [rumble]
+//!     cargo run --release --example pad_probe -- [seconds] [rumble|off]
 
 use std::ffi::CStr;
 
@@ -24,6 +26,7 @@ fn main() {
         .and_then(|arg| arg.parse().ok())
         .unwrap_or(45);
     let rumble = std::env::args().nth(2).is_some_and(|arg| arg == "rumble");
+    let power_off = std::env::args().nth(2).is_some_and(|arg| arg == "off");
 
     unsafe {
         sdl3_sys::everything::SDL_SetHint(
@@ -68,6 +71,31 @@ fn main() {
                         println!("MAPPING {}", c_str(mapping));
                         sdl3_sys::stdinc::SDL_free(mapping as *mut std::ffi::c_void);
                     }
+                    if power_off
+                        && unsafe { sdl3_sys::gamepad::SDL_GetGamepadVendor(pad) } == 0x057e
+                    {
+                        // "set HCI state: disconnect", see power_off_controllers in input.rs
+                        let command: [u8; 2] = [0x06, 0x00];
+                        let sent = unsafe {
+                            sdl3_sys::gamepad::SDL_SendGamepadEffect(
+                                pad,
+                                command.as_ptr() as *const std::ffi::c_void,
+                                command.len() as i32,
+                            )
+                        };
+                        println!(
+                            "{:6.2} POWER OFF {}",
+                            start.elapsed().as_secs_f32(),
+                            if sent {
+                                "sent".to_string()
+                            } else {
+                                c_str(sdl3_sys::error::SDL_GetError())
+                            }
+                        );
+                    }
+                }
+                sdl3_sys::events::SDL_EVENT_GAMEPAD_REMOVED => {
+                    println!("{:6.2} PAD removed", start.elapsed().as_secs_f32());
                 }
                 sdl3_sys::events::SDL_EVENT_GAMEPAD_BUTTON_DOWN => {
                     let button = unsafe { event.gbutton.button };

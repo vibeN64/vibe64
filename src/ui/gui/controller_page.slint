@@ -3,7 +3,7 @@
 
 import { ComboBox } from "std-widgets.slint";
 import { Page } from "page.slint";
-import { Theme, VButton, VSwitch, Card, FieldLabel, ButtonRow } from "theme.slint";
+import { Theme, VButton, VSwitch, Card, SettingRow, FieldLabel, ButtonRow } from "theme.slint";
 import { State } from "localgame_page.slint";
 
 export global ControllerData {
@@ -17,6 +17,7 @@ export global ControllerData {
     in-out property <[string]> controller_paths;
     in-out property <[int]> selected_controller;
     in-out property <[bool]> controller_changed;
+    in-out property <bool> power_off_controllers: true;
 }
 
 // Everything for one controller port: on/off, which pad, which mapping, Transfer Pak
@@ -129,6 +130,7 @@ export component ControllerConfig inherits Page {
     callback input_profile_button_clicked;
     callback transferpak_toggled(int, bool);
     callback controller_window_created;
+    callback power_off_controllers_toggled(bool);
     title: @tr("Controller Configuration");
 
     init => {
@@ -157,6 +159,22 @@ export component ControllerConfig inherits Page {
         index: index;
         transferpak_toggled(port, enabled) => {
             root.transferpak_toggled(port, enabled);
+        }
+    }
+
+    Card {
+        SettingRow {
+            label: @tr("Switch controllers off when VibeN64 quits");
+            hint: @tr("Wireless Nintendo Switch controllers, including the Switch Online N64 controller.");
+            divider: false;
+
+            VSwitch {
+                checked: ControllerData.power_off_controllers;
+                toggled => {
+                    ControllerData.power_off_controllers = self.checked;
+                    root.power_off_controllers_toggled(self.checked);
+                }
+            }
         }
     }
 
