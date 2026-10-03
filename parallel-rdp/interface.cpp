@@ -824,6 +824,15 @@ static void render_frame(Vulkan::Device &device) {
       device.request_program(vertex_spirv, sizeof(vertex_spirv), shader.spirv,
                              shader.size, &vertex_layout, &fragment_layout);
 
+  // The menu, messages and indicators are drawn over the picture as they are, not
+  // through the display shader, which would blur, stripe or bend them.
+  Vulkan::ResourceLayout overlay_layout = {};
+  overlay_layout.output_mask = 1 << 0;
+  overlay_layout.sets[0].sampled_image_mask = 1 << 0;
+  auto *overlay_program = device.request_program(
+      vertex_spirv, sizeof(vertex_spirv), plain_fragment_spirv,
+      sizeof(plain_fragment_spirv), &vertex_layout, &overlay_layout);
+
   // Blit image on screen.
   auto cmd = device.request_command_buffer();
   {
@@ -865,6 +874,10 @@ static void render_frame(Vulkan::Device &device) {
       // Draws fullscreen quad using oversized triangle.
       cmd->draw(3);
     }
+
+    // everything from here on is an overlay
+    cmd->set_program(overlay_program);
+
     if (!messages.empty()) {
       Message *message = &messages.front();
       if (!message->image) {
