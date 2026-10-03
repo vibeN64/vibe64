@@ -65,7 +65,12 @@ pub struct Video {
     pub fullscreen: bool,
     pub widescreen: bool,
     pub vsync: bool,
+    /// Older config files have this instead of `shader`: true was the CRT Aperture shader
+    #[serde(default)]
     pub crt: bool,
+    /// Which shader draws the picture, by the id the video code gives it
+    #[serde(default)]
+    pub shader: String,
 }
 
 #[derive(Default, serde::Serialize, serde::Deserialize)]
@@ -158,6 +163,19 @@ fn add_builtin_profiles(input: &mut Input) {
         .or_insert_with(ui::input_profile::get_nso_n64_profile);
 }
 
+// Config files from before there was a choice of shaders have a CRT on/off switch instead
+fn migrate_video(video: &mut Video) {
+    if video.shader.is_empty() {
+        video.shader = if video.crt {
+            "crt-aperture"
+        } else {
+            ui::video::DEFAULT_SHADER
+        }
+        .to_string();
+        video.crt = false;
+    }
+}
+
 impl Config {
     pub fn new() -> Config {
         let dirs = ui::get_dirs();
@@ -169,6 +187,7 @@ impl Config {
             if let Ok(mut result) = result {
                 result.write_to_disk = true;
                 add_builtin_profiles(&mut result.input);
+                migrate_video(&mut result.video);
                 return result;
             }
 
@@ -219,6 +238,7 @@ impl Config {
                 widescreen: false,
                 vsync: true,
                 crt: false,
+                shader: ui::video::DEFAULT_SHADER.to_string(),
             },
             emulation: Emulation {
                 overclock: false,

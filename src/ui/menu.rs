@@ -17,6 +17,7 @@ enum Item {
     Controllers,
     FastForward,
     Fullscreen,
+    Shader,
     Reset,
     Quit,
     // the controllers screen; the number is the N64 port, starting at 0
@@ -151,6 +152,7 @@ fn items(device: &device::Device, screen: Screen) -> Vec<Item> {
             Item::Controllers,
             Item::FastForward,
             Item::Fullscreen,
+            Item::Shader,
             Item::Reset,
             Item::Quit,
         ],
@@ -175,6 +177,7 @@ fn label(device: &device::Device, item: Item, fast_forward: bool) -> String {
         Item::Controllers => "Controllers...".to_string(),
         Item::FastForward => format!("Fast forward: {}", on_off(fast_forward)),
         Item::Fullscreen => format!("Fullscreen: {}", on_off(ui::video::is_fullscreen())),
+        Item::Shader => format!("Shader: {}", shader_name(device)),
         Item::Reset => "Reset game".to_string(),
         Item::Quit => "Quit game".to_string(),
         Item::Pad(port) => format!(
@@ -198,6 +201,14 @@ fn label(device: &device::Device, item: Item, fast_forward: bool) -> String {
         Item::Rumble => format!("Rumble: {}", on_off(device.ui.config.input.rumble)),
         Item::Back => "Back".to_string(),
     }
+}
+
+fn shader_name(device: &device::Device) -> String {
+    let shaders = ui::video::shaders();
+    shaders
+        .get(ui::video::shader_index(&device.ui.config.video.shader) as usize)
+        .map(|(_, name)| name.clone())
+        .unwrap_or_default()
 }
 
 /// The next (or previous) entry of a list that wraps around
@@ -322,6 +333,12 @@ pub fn run(device: &mut device::Device) {
                 };
                 ui::video::set_save_state_slot(device, slot);
             }
+            Item::Shader if changed => {
+                // takes effect at once, so the menu shows over the new look
+                let count = ui::video::shaders().len();
+                let current = ui::video::shader_index(&device.ui.config.video.shader) as usize;
+                ui::video::set_shader(device, step(count, Some(current), forward));
+            }
             Item::Pad(port) if changed => change_pad(device, port, forward),
             Item::Profile(port) if changed => change_profile(device, port, forward),
             Item::Rumble if changed => {
@@ -358,7 +375,8 @@ pub fn run(device: &mut device::Device) {
                     break;
                 }
                 // changed above
-                Item::StateSlot | Item::Pad(_) | Item::Profile(_) | Item::Rumble => {}
+                Item::StateSlot | Item::Shader | Item::Pad(_) | Item::Profile(_) | Item::Rumble => {
+                }
             },
             _ => {}
         }
