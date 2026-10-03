@@ -266,6 +266,7 @@ fn controller_window(app: &AppWindow, config: &ui::config::Config) {
 
     app.set_emulate_vru(config.input.emulate_vru);
     app.set_power_off_controllers(config.input.power_off_controllers);
+    app.set_rumble_enabled(config.input.rumble);
     POWER_OFF_ON_QUIT.store(
         config.input.power_off_controllers,
         std::sync::atomic::Ordering::Relaxed,
@@ -469,6 +470,25 @@ fn controller_window(app: &AppWindow, config: &ui::config::Config) {
     });
 }
 
+/// A game can change some controller settings from its in-game menu (the input profile of
+/// each player, rumble). Show what it saved, so that the launcher does not write its old
+/// values back over them.
+fn refresh_controller_settings(handle: &AppWindow) {
+    let config = ui::config::Config::new();
+    let profiles = input_profiles(&config);
+    let bindings = slint::VecModel::default();
+    for binding in config.input.input_profile_binding.iter() {
+        bindings.push(
+            profiles
+                .iter()
+                .position(|name| name == binding)
+                .unwrap_or(0) as i32,
+        );
+    }
+    handle.set_selected_profile_binding(slint::ModelRc::from(std::rc::Rc::new(bindings)));
+    handle.set_rumble_enabled(config.input.rumble);
+}
+
 pub fn save_settings(app: &AppWindow) {
     let mut config = ui::config::Config::new();
     config.ui.rom_dir = app.get_rom_dir().to_string().into();
@@ -488,6 +508,7 @@ pub fn save_settings(app: &AppWindow) {
 
     config.input.emulate_vru = app.get_emulate_vru();
     config.input.power_off_controllers = app.get_power_off_controllers();
+    config.input.rumble = app.get_rumble_enabled();
     for (i, controller_enabled) in app.get_controller_enabled().iter().enumerate() {
         config.input.controller_enabled[i] = controller_enabled;
     }
@@ -677,6 +698,7 @@ pub fn run_rom(
             if success {
                 update_recent_roms(&handle, file_path);
             }
+            refresh_controller_settings(&handle);
             handle.set_game_running(false);
         })
         .unwrap();

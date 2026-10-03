@@ -43,7 +43,7 @@ Keys are mapped according to [these defaults](https://github.com/gopher64/gopher
 
 ### in-game menu
 
-**Esc**, or the hotkey button plus Start on a controller, pauses the game and opens a menu: resume, save and load state, state slot, switch controller pak (Memory Pak, Rumble Pak, Transfer Pak), fast forward, fullscreen, reset and quit. Move with the d-pad, stick or arrow keys, choose with A or Enter, go back with B or Esc. It works the same in fullscreen, so a fullscreen game no longer needs the keyboard to leave. It is not available in netplay or in RetroAchievements hardcore mode, where pausing is not allowed; there Esc still leaves a fullscreen game.
+**Esc**, or the hotkey button plus Start on a controller, pauses the game and opens a menu: resume, save and load state, state slot, controllers, fast forward, fullscreen, reset and quit. The Controllers screen has, for each player, the pad they use, their input profile and their pak (Memory Pak, Rumble Pak, Transfer Pak), and a rumble switch. Pad and profile choices are saved. Move with the d-pad, stick or arrow keys, choose with A or Enter, go back with B and close the menu with Esc. It works the same in fullscreen, so a fullscreen game no longer needs the keyboard to leave. It is not available in netplay or in RetroAchievements hardcore mode, where pausing is not allowed; there Esc still leaves a fullscreen game.
 
 The hotkey button is Capture on a Nintendo Switch Online N64 controller. With the hotkey held, L saves a state, R loads one, Z toggles fast forward and C-Left rewinds.
 

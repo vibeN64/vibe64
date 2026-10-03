@@ -9,15 +9,28 @@ use crate::{device, retroachievements, ui};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Item {
+    // the main screen
     Resume,
     SaveState,
     LoadState,
     StateSlot,
-    SwitchPak,
+    Controllers,
     FastForward,
     Fullscreen,
     Reset,
     Quit,
+    // the controllers screen; the number is the N64 port, starting at 0
+    Pad(usize),
+    Profile(usize),
+    Pak(usize),
+    Rumble,
+    Back,
+}
+
+#[derive(Clone, Copy, PartialEq)]
+enum Screen {
+    Main,
+    Controllers,
 }
 
 /// What is held down, on player 1's controller or the keyboard
@@ -77,8 +90,8 @@ fn read_buttons(ui: &mut ui::Ui) -> Buttons {
     }
 }
 
-fn pak_name(device: &device::Device) -> Option<&'static str> {
-    device.pif.channels[0]
+fn pak_name(device: &device::Device, port: usize) -> Option<&'static str> {
+    device.pif.channels[port]
         .pak_handler
         .map(|handler| match handler.pak_type {
             device::controller::PakType::RumblePak => "Rumble Pak",
@@ -91,6 +104,67 @@ fn on_off(on: bool) -> &'static str {
     if on { "On" } else { "Off" }
 }
 
+/// The N64 ports with a controller plugged in (the ones the settings enable)
+fn active_ports(device: &device::Device) -> Vec<usize> {
+    (0..4)
+        .filter(|&port| {
+            device.pif.channels[port].process.is_some()
+                && !(port == 3 && device.ui.config.input.emulate_vru)
+        })
+        .collect()
+}
+
+/// The input profiles in the order the launcher lists them: "default" first
+fn profile_names(device: &device::Device) -> Vec<String> {
+    let mut names: Vec<String> = device
+        .ui
+        .config
+        .input
+        .input_profiles
+        .keys()
+        .cloned()
+        .collect();
+    if let Some(position) = names.iter().position(|name| name == "default") {
+        let default = names.remove(position);
+        names.insert(0, default);
+    }
+    names
+}
+
+fn profile_label(device: &device::Device, port: usize) -> String {
+    let name = &device.ui.config.input.input_profile_binding[port];
+    if name == "default" && device.ui.input.controllers[port].nso_n64 {
+        // see get_nso_n64_profile: the default layout cannot work on this controller
+        "default (NSO N64 layout)".to_string()
+    } else {
+        name.clone()
+    }
+}
+
+fn items(device: &device::Device, screen: Screen) -> Vec<Item> {
+    match screen {
+        Screen::Main => vec![
+            Item::Resume,
+            Item::SaveState,
+            Item::LoadState,
+            Item::StateSlot,
+            Item::Controllers,
+            Item::FastForward,
+            Item::Fullscreen,
+            Item::Reset,
+            Item::Quit,
+        ],
+        Screen::Controllers => {
+            let mut items = vec![];
+            for port in active_ports(device) {
+                items.extend([Item::Pad(port), Item::Profile(port), Item::Pak(port)]);
+            }
+            items.extend([Item::Rumble, Item::Back]);
+            items
+        }
+    }
+}
+
 fn label(device: &device::Device, item: Item, fast_forward: bool) -> String {
     let slot = device.ui.storage.save_state_slot;
     match item {
@@ -98,15 +172,65 @@ fn label(device: &device::Device, item: Item, fast_forward: bool) -> String {
         Item::SaveState => format!("Save state (slot {slot})"),
         Item::LoadState => format!("Load state (slot {slot})"),
         Item::StateSlot => format!("State slot: {slot}"),
-        Item::SwitchPak => format!(
-            "Switch controller pak (now: {})",
-            pak_name(device).unwrap_or("none")
-        ),
+        Item::Controllers => "Controllers...".to_string(),
         Item::FastForward => format!("Fast forward: {}", on_off(fast_forward)),
         Item::Fullscreen => format!("Fullscreen: {}", on_off(ui::video::is_fullscreen())),
         Item::Reset => "Reset game".to_string(),
         Item::Quit => "Quit game".to_string(),
+        Item::Pad(port) => format!(
+            "Player {} pad: {}",
+            port + 1,
+            ui::input::port_pad_name(&device.ui, port)
+                .unwrap_or_else(|| "none connected".to_string())
+        ),
+        Item::Profile(port) => {
+            format!(
+                "Player {} profile: {}",
+                port + 1,
+                profile_label(device, port)
+            )
+        }
+        Item::Pak(port) => format!(
+            "Player {} pak: {}",
+            port + 1,
+            pak_name(device, port).unwrap_or("changing...")
+        ),
+        Item::Rumble => format!("Rumble: {}", on_off(device.ui.config.input.rumble)),
+        Item::Back => "Back".to_string(),
     }
+}
+
+/// The next (or previous) entry of a list that wraps around
+fn step(len: usize, current: Option<usize>, forward: bool) -> usize {
+    match (current, forward) {
+        (Some(i), true) => (i + 1) % len,
+        (Some(i), false) => (i + len - 1) % len,
+        (None, true) => 0,
+        (None, false) => len - 1,
+    }
+}
+
+fn change_pad(device: &mut device::Device, port: usize, forward: bool) {
+    let pads = ui::input::pads_for_port(&device.ui, port);
+    if pads.is_empty() {
+        return;
+    }
+    let current = ui::input::port_pad_id(&device.ui, port)
+        .and_then(|id| pads.iter().position(|(pad, _)| *pad == id));
+    let (joystick_id, _) = pads[step(pads.len(), current, forward)];
+    ui::input::assign_pad(&mut device.ui, port, joystick_id);
+}
+
+fn change_profile(device: &mut device::Device, port: usize, forward: bool) {
+    let names = profile_names(device);
+    if names.is_empty() {
+        return;
+    }
+    let current = names
+        .iter()
+        .position(|name| *name == device.ui.config.input.input_profile_binding[port]);
+    let name = names[step(names.len(), current, forward)].clone();
+    ui::input::set_profile(&mut device.ui, port, &name);
 }
 
 /// One step of the menu loop: draw, wait a frame, and let SDL and RetroAchievements tick
@@ -124,36 +248,33 @@ pub fn run(device: &mut device::Device) {
         ui::input::set_rumble(&device.ui, channel, 0);
     }
 
-    let mut items = vec![
-        Item::Resume,
-        Item::SaveState,
-        Item::LoadState,
-        Item::StateSlot,
-    ];
-    if pak_name(device).is_some() {
-        items.push(Item::SwitchPak);
-    }
-    items.extend([Item::FastForward, Item::Fullscreen, Item::Reset, Item::Quit]);
-
-    let mut selected = 0;
+    let mut screen = Screen::Main;
+    let mut selected = [0usize; 2]; // per screen, so that coming back finds its place
     let mut fast_forward = !device.speed_limiter.enabled;
-    let mut shown: Option<(Vec<String>, usize)> = None;
+    let mut shown: Option<(Screen, Vec<String>, usize)> = None;
     // Whatever is held as the menu opens does nothing until it has been let go
     let mut previous = Buttons::ALL;
 
     loop {
+        let items = items(device, screen);
+        let current = &mut selected[screen as usize];
+        *current = (*current).min(items.len() - 1);
+
         let labels: Vec<String> = items
             .iter()
             .map(|item| label(device, *item, fast_forward))
             .collect();
-        if shown.as_ref() != Some(&(labels.clone(), selected)) {
+        if shown.as_ref() != Some(&(screen, labels.clone(), *current)) {
             ui::video::show_menu(
-                "Paused",
+                match screen {
+                    Screen::Main => "Paused",
+                    Screen::Controllers => "Controllers",
+                },
                 &labels,
-                selected,
-                "Up/Down: move    A or Enter: choose    Left/Right: change    B or Esc: back",
+                *current,
+                "Up/Down: move    A or Enter: choose    Left/Right: change    B: back    Esc: close",
             );
-            shown = Some((labels, selected));
+            shown = Some((screen, labels, *current));
         }
         frame();
 
@@ -174,26 +295,39 @@ pub fn run(device: &mut device::Device) {
         previous = buttons;
 
         if pressed.back {
-            break;
+            if screen == Screen::Main {
+                break;
+            }
+            screen = Screen::Main;
+            continue;
         }
+        let current = &mut selected[screen as usize];
         if pressed.up {
-            selected = (selected + items.len() - 1) % items.len();
+            *current = (*current + items.len() - 1) % items.len();
         }
         if pressed.down {
-            selected = (selected + 1) % items.len();
+            *current = (*current + 1) % items.len();
         }
 
-        let item = items[selected];
-        if item == Item::StateSlot && (pressed.left || pressed.right || pressed.accept) {
-            let slot = device.ui.storage.save_state_slot;
-            let slot = if pressed.left {
-                (slot + 9) % 10
-            } else {
-                (slot + 1) % 10
-            };
-            ui::video::set_save_state_slot(device, slot);
-        } else if pressed.accept {
-            match item {
+        let item = items[*current];
+        let forward = !pressed.left;
+        let changed = pressed.left || pressed.right || pressed.accept;
+        match item {
+            Item::StateSlot if changed => {
+                let slot = device.ui.storage.save_state_slot;
+                let slot = if forward {
+                    (slot + 1) % 10
+                } else {
+                    (slot + 9) % 10
+                };
+                ui::video::set_save_state_slot(device, slot);
+            }
+            Item::Pad(port) if changed => change_pad(device, port, forward),
+            Item::Profile(port) if changed => change_profile(device, port, forward),
+            Item::Rumble if changed => {
+                device.ui.config.input.rumble = !device.ui.config.input.rumble;
+            }
+            _ if pressed.accept => match item {
                 Item::Resume => break,
                 Item::SaveState => {
                     device.savestate.save_state = true;
@@ -203,9 +337,11 @@ pub fn run(device: &mut device::Device) {
                     device.savestate.load_state = true;
                     break;
                 }
-                Item::SwitchPak => {
+                Item::Controllers => screen = Screen::Controllers,
+                Item::Back => screen = Screen::Main,
+                Item::Pak(port) => {
                     // the new pak goes in half a second into the game, with a message
-                    device::controller::request_pak_change(device, 0);
+                    device::controller::request_pak_change(device, port);
                     break;
                 }
                 Item::FastForward => {
@@ -221,8 +357,10 @@ pub fn run(device: &mut device::Device) {
                     ui::input::push_user_event(ui::input::USER_EVENT_EXIT_GAME);
                     break;
                 }
-                Item::StateSlot => {}
-            }
+                // changed above
+                Item::StateSlot | Item::Pad(_) | Item::Profile(_) | Item::Rumble => {}
+            },
+            _ => {}
         }
     }
 

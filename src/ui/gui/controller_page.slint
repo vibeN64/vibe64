@@ -18,6 +18,7 @@ export global ControllerData {
     in-out property <[int]> selected_controller;
     in-out property <[bool]> controller_changed;
     in-out property <bool> power_off_controllers: true;
+    in-out property <bool> rumble_enabled: true;
 }
 
 // Everything for one controller port: on/off, which pad, which mapping, Transfer Pak
@@ -163,6 +164,18 @@ export component ControllerConfig inherits Page {
     }
 
     Card {
+        SettingRow {
+            label: @tr("Rumble");
+            hint: @tr("Shake the controller when a game asks for it. Games that support the Rumble Pak start with one in the controller.");
+
+            VSwitch {
+                checked: ControllerData.rumble_enabled;
+                toggled => {
+                    ControllerData.rumble_enabled = self.checked;
+                }
+            }
+        }
+
         SettingRow {
             label: @tr("Switch controllers off when VibeN64 quits");
             hint: @tr("Wireless Nintendo Switch controllers, including the Switch Online N64 controller.");
