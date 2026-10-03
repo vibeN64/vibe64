@@ -479,7 +479,7 @@ fn controller_window(app: &AppWindow, config: &ui::config::Config) {
 }
 
 /// A game can change some settings from its in-game menu (the input profile of each
-/// player, rumble, the shader). Show what it saved, so that the launcher does not write
+/// player, rumble, the shader, the cheats). Show what it saved, so that the launcher does not write
 /// its old values back over them.
 fn refresh_settings(handle: &AppWindow) {
     let config = ui::config::Config::new();
@@ -496,6 +496,12 @@ fn refresh_settings(handle: &AppWindow) {
     handle.set_selected_profile_binding(slint::ModelRc::from(std::rc::Rc::new(bindings)));
     handle.set_rumble_enabled(config.input.rumble);
     handle.set_shader(ui::video::shader_index(&config.video.shader) as i32);
+
+    // the Cheats page shows the choice from before the game, which the menu can change
+    handle.set_cheats(slint::ModelRc::from(std::rc::Rc::new(
+        slint::VecModel::default(),
+    )));
+    handle.set_cheat_game_name(String::new().into());
 }
 
 pub fn save_settings(app: &AppWindow) {
