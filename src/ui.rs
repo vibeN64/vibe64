@@ -171,6 +171,10 @@ pub fn ttf_init() {
     }
 }
 
+/// A game started by the launcher is given the path of a file to create once its window
+/// is up. The launcher waits for it before it steps out of the way.
+pub const READY_FILE_ENV: &str = "VIBEN64_READY_FILE";
+
 pub fn sdl_close() {
     unsafe {
         sdl3_ttf_sys::ttf::TTF_Quit();

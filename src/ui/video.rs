@@ -136,6 +136,9 @@ pub fn init(device: &mut device::Device, netplay: bool) {
             }
         );
     }
+    if let Some(ready_file) = std::env::var_os(ui::READY_FILE_ENV) {
+        let _ = std::fs::write(ready_file, b"");
+    }
     unsafe {
         sdl3_sys::everything::SDL_HideCursor();
     }
