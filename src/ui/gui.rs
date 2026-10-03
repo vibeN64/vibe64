@@ -637,6 +637,113 @@ pub fn app_window(
     launcher_exit();
 }
 
+/// While a game runs, in a process of its own, the launcher steps out of the way: no
+/// window, no Dock icon. Otherwise macOS shows two VibeN64 apps at once.
+#[cfg(not(target_os = "android"))]
+fn launcher_away(away: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            fn viben64_launcher_away(away: bool);
+        }
+        unsafe { viben64_launcher_away(away) };
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = away;
+}
+
+/// Keeps the launcher out of the way for as long as it is alive, and brings it back when
+/// dropped, whatever ends the task that holds it: an error, a panic, or the game ending.
+#[cfg(not(target_os = "android"))]
+struct LauncherAway {
+    away: bool,
+}
+
+#[cfg(not(target_os = "android"))]
+impl LauncherAway {
+    fn hide(&mut self) {
+        if !self.away {
+            self.away = true;
+            launcher_away(true);
+        }
+    }
+}
+
+#[cfg(not(target_os = "android"))]
+impl Drop for LauncherAway {
+    fn drop(&mut self) {
+        if self.away {
+            launcher_away(false);
+        }
+    }
+}
+
+/// Runs a game in a process of its own and waits for it to end. Returns whether it ended
+/// well. The launcher steps out of the way once the game's window is up, not before, so
+/// that there is always something on screen and the game is already in front.
+#[cfg(not(target_os = "android"))]
+async fn run_game_process(
+    file_path: &std::path::Path,
+    game_settings: &ui::GameSettings,
+    netplay: Option<NetplayDevice>,
+    cache_dir: &std::path::Path,
+    launcher: &mut LauncherAway,
+) -> std::io::Result<bool> {
+    let current_exe = std::env::current_exe()?;
+    let cli_path = current_exe
+        .parent()
+        .map(|dir| dir.join(format!("{}-cli", env!("CARGO_PKG_NAME"))));
+    let cmd_path = match cli_path {
+        Some(cli_path) if cfg!(target_os = "macos") && cli_path.exists() => cli_path,
+        _ => current_exe,
+    };
+    let mut command = tokio::process::Command::new(cmd_path);
+    command.args([
+        "--overclock",
+        &game_settings.overclock.to_string(),
+        "--disable-expansion-pak",
+        &game_settings.disable_expansion_pak.to_string(),
+    ]);
+    if let Some(netplay_device) = netplay {
+        let cheats_path = cache_dir.join("cheats.json");
+        let f = std::fs::File::create(&cheats_path)?;
+        serde_json::to_writer_pretty(f, &game_settings.cheats).map_err(std::io::Error::other)?;
+
+        command
+            .args([
+                "--netplay-server-addr",
+                &netplay_device.server_addr,
+                "--netplay-player-number",
+                &netplay_device.player_number.to_string(),
+                "--netplay-number-of-players",
+                &netplay_device.number_of_players.to_string(),
+                "--netplay-input-delay",
+                &netplay_device.input_delay.to_string(),
+                "--cheats",
+            ])
+            .arg(&cheats_path);
+    }
+
+    let ready_file = cache_dir.join("game-window-up");
+    let _ = std::fs::remove_file(&ready_file);
+    command.env(ui::READY_FILE_ENV, &ready_file);
+
+    let mut child = command.arg(file_path).spawn()?;
+    let mut poll = tokio::time::interval(std::time::Duration::from_millis(100));
+    let status = loop {
+        tokio::select! {
+            status = child.wait() => break status,
+            _ = poll.tick(), if !launcher.away => {
+                if ready_file.exists() {
+                    launcher.hide();
+                }
+            }
+        }
+    };
+    let _ = std::fs::remove_file(&ready_file);
+    Ok(status?.success())
+}
+
 pub fn run_rom(
     file_path: std::path::PathBuf,
     game_settings: ui::GameSettings,
@@ -648,62 +755,41 @@ pub fn run_rom(
 
     #[cfg(not(target_os = "android"))]
     tokio::spawn(async move {
+        // worked out first, once: it needs the app's own path, which can go missing while
+        // a game runs (the app replaced on disk), and nothing after the game may depend on it
+        let cache_dir = ui::get_dirs().cache_dir;
+
         weak.upgrade_in_event_loop(move |handle| handle.set_game_running(true))
             .unwrap();
         GAME_RUNNING.store(true, std::sync::atomic::Ordering::Relaxed);
 
-        let cli_path = std::env::current_exe()
-            .unwrap()
-            .parent()
-            .unwrap()
-            .join(format!("{}-cli", env!("CARGO_PKG_NAME")));
-        let cmd_path = if cfg!(target_os = "macos") && cli_path.exists() {
-            cli_path
-        } else {
-            std::env::current_exe().unwrap()
+        // dropped, which brings the launcher back, when this task ends for any reason
+        let mut launcher = LauncherAway { away: false };
+        let success = match run_game_process(
+            &file_path,
+            &game_settings,
+            netplay,
+            &cache_dir,
+            &mut launcher,
+        )
+        .await
+        {
+            Ok(success) => success,
+            Err(e) => {
+                eprintln!("Could not run game: {e}");
+                false
+            }
         };
-        let mut command = tokio::process::Command::new(cmd_path);
-        command.args([
-            "--overclock",
-            &game_settings.overclock.to_string(),
-            "--disable-expansion-pak",
-            &game_settings.disable_expansion_pak.to_string(),
-        ]);
-        let cheats_path = ui::get_dirs().cache_dir.join("cheats.json");
-        if let Some(netplay_device) = netplay {
-            let f = std::fs::File::create(&cheats_path).unwrap();
-            serde_json::to_writer_pretty(f, &game_settings.cheats).unwrap();
-
-            command.args([
-                "--netplay-server-addr",
-                &netplay_device.server_addr,
-                "--netplay-player-number",
-                &netplay_device.player_number.to_string(),
-                "--netplay-number-of-players",
-                &netplay_device.number_of_players.to_string(),
-                "--netplay-input-delay",
-                &netplay_device.input_delay.to_string(),
-                "--cheats",
-                cheats_path.to_str().unwrap(),
-            ]);
-        }
-
-        let success = command
-            .arg(file_path.to_str().unwrap())
-            .status()
-            .await
-            .unwrap()
-            .success();
 
         if !success {
             eprintln!("Failed to run game");
         }
 
-        let _ = std::fs::remove_file(cheats_path);
+        let _ = std::fs::remove_file(cache_dir.join("cheats.json"));
         GAME_RUNNING.store(false, std::sync::atomic::Ordering::Relaxed);
 
         weak.upgrade_in_event_loop(move |handle| {
-            if let Some(rom_dir) = file_path.parent().unwrap().to_str() {
+            if let Some(rom_dir) = file_path.parent().and_then(|dir| dir.to_str()) {
                 handle.set_rom_dir(rom_dir.into());
             }
             if success {
@@ -713,6 +799,7 @@ pub fn run_rom(
             handle.set_game_running(false);
         })
         .unwrap();
+        drop(launcher);
     });
 }
 
