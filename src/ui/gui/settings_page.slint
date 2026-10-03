@@ -31,7 +31,7 @@ export component Settings inherits Page {
 
         SettingRow {
             label: @tr("Resolution:");
-            hint: @tr("Internal rendering resolution, as a multiple of the original.");
+            hint: @tr("Internal rendering resolution, as a multiple of the original. With SSAA downscaling on, the picture is scaled back down, so a higher setting only smooths edges.");
             divider: false;
 
             ComboBox {

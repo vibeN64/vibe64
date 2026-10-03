@@ -145,6 +145,13 @@ fn main() {
 
         println!("cargo:rustc-link-search=native={}", runtime_dir);
         println!("cargo:rustc-link-lib=static=clang_rt.osx");
+
+        // lets the launcher step out of the Dock while a game runs
+        cc::Build::new()
+            .file("src/compat/macos_dock.m")
+            .flag("-fobjc-arc")
+            .compile("macos_dock");
+        println!("cargo:rustc-link-lib=framework=AppKit");
     }
 
     // Cross-language LTO needs a clang built on the same LLVM as rustc. Apple's clang

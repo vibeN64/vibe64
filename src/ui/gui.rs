@@ -637,6 +637,21 @@ pub fn app_window(
     launcher_exit();
 }
 
+/// While a game runs, in a process of its own, the launcher steps out of the way: no
+/// window, no Dock icon. Otherwise macOS shows two VibeN64 apps at once.
+#[cfg(not(target_os = "android"))]
+fn launcher_away(away: bool) {
+    #[cfg(target_os = "macos")]
+    {
+        unsafe extern "C" {
+            fn viben64_launcher_away(away: bool);
+        }
+        unsafe { viben64_launcher_away(away) };
+    }
+    #[cfg(not(target_os = "macos"))]
+    let _ = away;
+}
+
 pub fn run_rom(
     file_path: std::path::PathBuf,
     game_settings: ui::GameSettings,
@@ -648,8 +663,11 @@ pub fn run_rom(
 
     #[cfg(not(target_os = "android"))]
     tokio::spawn(async move {
-        weak.upgrade_in_event_loop(move |handle| handle.set_game_running(true))
-            .unwrap();
+        weak.upgrade_in_event_loop(move |handle| {
+            handle.set_game_running(true);
+            launcher_away(true);
+        })
+        .unwrap();
         GAME_RUNNING.store(true, std::sync::atomic::Ordering::Relaxed);
 
         let cli_path = std::env::current_exe()
@@ -711,6 +729,7 @@ pub fn run_rom(
             }
             refresh_settings(&handle);
             handle.set_game_running(false);
+            launcher_away(false);
         })
         .unwrap();
     });
