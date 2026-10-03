@@ -24,19 +24,61 @@ pub struct CheatData {
 
 pub type Cheat = std::collections::BTreeMap<String, std::collections::BTreeMap<String, CheatData>>;
 
-pub fn init(
-    device: &mut device::Device,
-    cheat_settings: rustc_hash::FxHashMap<String, Option<String>>,
-) {
-    let cheats = serde_json::from_slice::<Cheat>(include_bytes!("../data/cheats.json"))
+/// The cheats the database has for a game, by name
+pub fn game_cheats(rom: &[u8]) -> std::collections::BTreeMap<String, CheatData> {
+    serde_json::from_slice::<Cheat>(include_bytes!("../data/cheats.json"))
         .unwrap()
-        .get(&ui::storage::get_game_crc(&device.cart.rom))
+        .get(&ui::storage::get_game_crc(rom))
         .cloned()
-        .unwrap_or_default();
+        .unwrap_or_default()
+}
 
-    let re = regex::Regex::new(r"\?+").unwrap();
-    for cheat_setting in cheat_settings.iter() {
-        if let Some(cheat_data) = cheats.get(cheat_setting.0) {
+/// The codes of one cheat. A cheat with options has ?? in its codes where the value of the
+/// chosen option goes.
+fn decode(
+    name: &str,
+    cheat_data: &CheatData,
+    option_value: Option<&str>,
+    placeholder: &regex::Regex,
+) -> Vec<DecodedCheat> {
+    let mut decoded_cheat: Vec<DecodedCheat> = vec![];
+    for code in cheat_data.data.iter() {
+        let mut result = code.clone();
+        if let Some(option_value) = option_value {
+            result = placeholder.replace_all(code, option_value).into_owned();
+        }
+        let mut split = result.split_whitespace();
+        let (Some(address), Some(data)) = (split.next(), split.next()) else {
+            eprintln!("Could not parse code for: {name}");
+            continue;
+        };
+        if let Ok(first_part) = u32::from_str_radix(address, 16)
+            && let Ok(data) = u16::from_str_radix(data, 16)
+        {
+            decoded_cheat.push(DecodedCheat {
+                code_type: (first_part >> 24) as u8,
+                address: first_part & 0x00FFFFFF,
+                data,
+            })
+        } else {
+            eprintln!("Could not parse data for: {name}");
+        };
+    }
+    decoded_cheat
+}
+
+/// Makes the running cheats the chosen ones: `settings` maps the name of each chosen cheat
+/// to the option picked for it, if it has options. Cheats run when there are any.
+pub fn apply(
+    device: &mut device::Device,
+    available: &std::collections::BTreeMap<String, CheatData>,
+    settings: &rustc_hash::FxHashMap<String, Option<String>>,
+) {
+    device.cheats.cheats.clear();
+
+    let placeholder = regex::Regex::new(r"\?+").unwrap();
+    for cheat_setting in settings.iter() {
+        if let Some(cheat_data) = available.get(cheat_setting.0) {
             let mut option_value = None;
             if let Some(option) = cheat_setting.1 {
                 if let Some(found_option_value) = cheat_data
@@ -58,24 +100,12 @@ pub fn init(
                 cheat_setting.0,
                 cheat_setting.1.clone().unwrap_or("none".to_string())
             );
-            let mut decoded_cheat: Vec<DecodedCheat> = vec![];
-            for code in cheat_data.data.iter() {
-                let mut result = code.clone();
-                if let Some(option_value) = option_value.as_ref() {
-                    result = re.replace_all(code, option_value).into_owned();
-                }
-                let mut split = result.split_whitespace();
-                let first_part = u32::from_str_radix(split.next().unwrap(), 16).unwrap();
-                if let Ok(data) = u16::from_str_radix(split.next().unwrap(), 16) {
-                    decoded_cheat.push(DecodedCheat {
-                        code_type: (first_part >> 24) as u8,
-                        address: first_part & 0x00FFFFFF,
-                        data,
-                    })
-                } else {
-                    eprintln!("Could not parse data for: {}", cheat_setting.0);
-                };
-            }
+            let decoded_cheat = decode(
+                cheat_setting.0,
+                cheat_data,
+                option_value.as_deref(),
+                &placeholder,
+            );
             if !decoded_cheat.is_empty() {
                 device.cheats.cheats.push(decoded_cheat);
             }
@@ -84,8 +114,17 @@ pub fn init(
         }
     }
 
-    if !device.cheats.cheats.is_empty() {
-        device.cheats.enabled = true;
+    device.cheats.enabled = !device.cheats.cheats.is_empty();
+}
+
+pub fn init(
+    device: &mut device::Device,
+    cheat_settings: rustc_hash::FxHashMap<String, Option<String>>,
+) {
+    let available = game_cheats(&device.cart.rom);
+    apply(device, &available, &cheat_settings);
+
+    if device.cheats.enabled {
         ui::video::onscreen_message("Cheats enabled", ui::video::MESSAGE_LENGTH_MESSAGE_SHORT);
     }
 }

@@ -5,7 +5,7 @@
 //! This file decides what the menu offers and does; the panel itself is drawn by
 //! rdp_menu_show in parallel-rdp/interface.cpp.
 
-use crate::{device, retroachievements, ui};
+use crate::{cheats, device, retroachievements, ui};
 
 #[derive(Clone, Copy, PartialEq)]
 enum Item {
@@ -15,6 +15,7 @@ enum Item {
     LoadState,
     StateSlot,
     Controllers,
+    Cheats,
     FastForward,
     Fullscreen,
     Shader,
@@ -26,12 +27,117 @@ enum Item {
     Pak(usize),
     Rumble,
     Back,
+    // the cheats screen; the number is the place of the cheat in the game's list
+    CheatsMaster,
+    Cheat(usize),
+    NoCheats,
 }
 
 #[derive(Clone, Copy, PartialEq)]
 enum Screen {
     Main,
     Controllers,
+    Cheats,
+}
+
+/// The cheats the built-in database knows for the game that is running, and which of them are
+/// switched on. Loaded when the Cheats screen is first opened: the database is large.
+#[derive(Default)]
+struct CheatList {
+    loaded: bool,
+    /// the game, as the cheat settings file knows it
+    game: String,
+    available: std::collections::BTreeMap<String, cheats::CheatData>,
+    /// the names in `available`, in the order they are shown
+    names: Vec<String>,
+    /// the chosen cheats, each with its option if it has options
+    chosen: rustc_hash::FxHashMap<String, Option<String>>,
+}
+
+impl CheatList {
+    fn load(device: &device::Device) -> CheatList {
+        let game = ui::storage::get_game_crc(&device.cart.rom);
+        let available = cheats::game_cheats(&device.cart.rom);
+        let names = available.keys().cloned().collect();
+        let chosen = ui::config::Cheats::new()
+            .cheats
+            .remove(&game)
+            .unwrap_or_default();
+        CheatList {
+            loaded: true,
+            game,
+            available,
+            names,
+            chosen,
+        }
+    }
+
+    fn options(&self, index: usize) -> Vec<String> {
+        self.available[&self.names[index]]
+            .options
+            .as_ref()
+            .map(|options| options.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    fn label(&self, index: usize) -> String {
+        let name = &self.names[index];
+        let chosen = self.chosen.get(name);
+        let mark = if chosen.is_some() { "[x]" } else { "[ ]" };
+        let options = self.options(index);
+        let label = if options.is_empty() {
+            format!("{mark} {name}")
+        } else {
+            // the option in force, or the one that switching the cheat on would use
+            let option = chosen
+                .and_then(|option| option.clone())
+                .unwrap_or_else(|| options[0].clone());
+            format!("{mark} {name}: {option}")
+        };
+        shorten(&label, 64)
+    }
+
+    /// A press on a cheat: A, or Left/Right on one without options, switches it on or off.
+    /// Left/Right on one with options picks the previous or next option, and switches it on.
+    fn change(&mut self, index: usize, pick_option: Option<bool>) {
+        let name = self.names[index].clone();
+        let options = self.options(index);
+        match pick_option {
+            Some(forward) if !options.is_empty() => {
+                let current = self
+                    .chosen
+                    .get(&name)
+                    .and_then(|option| option.as_ref())
+                    .and_then(|option| options.iter().position(|o| o == option));
+                let next = options[step(options.len(), current, forward)].clone();
+                self.chosen.insert(name, Some(next));
+            }
+            _ => {
+                if self.chosen.remove(&name).is_none() {
+                    self.chosen
+                        .insert(name, options.first().map(|option| option.to_string()));
+                }
+            }
+        }
+    }
+
+    /// Saves the choice with the other settings (the launcher's Cheats page reads the same
+    /// file) and makes it the running cheats.
+    fn save_and_apply(&self, device: &mut device::Device) {
+        let mut saved = ui::config::Cheats::new();
+        saved.cheats.insert(self.game.clone(), self.chosen.clone());
+        cheats::apply(device, &self.available, &self.chosen);
+    }
+}
+
+/// `text` cut to at most `max` characters, with ... where it was cut
+fn shorten(text: &str, max: usize) -> String {
+    if text.chars().count() <= max {
+        text.to_string()
+    } else {
+        let cut: String = text.chars().take(max - 3).collect();
+        format!("{}...", cut.trim_end())
+    }
 }
 
 /// What is held down, on player 1's controller or the keyboard
@@ -142,7 +248,24 @@ fn profile_label(device: &device::Device, port: usize) -> String {
     }
 }
 
-fn items(device: &device::Device, screen: Screen) -> Vec<Item> {
+const CONTROLS_HINT: &str =
+    "Up/Down: move    A or Enter: choose    Left/Right: change    B: back    Esc: close";
+
+/// How many rows of a long list show at once; the panel scrolls to keep the selected one
+const VISIBLE_ROWS: usize = 11;
+
+/// The rows of a list of `len` that show, with `selected` in the middle where it can be
+fn visible_window(len: usize, selected: usize) -> (usize, usize) {
+    if len <= VISIBLE_ROWS {
+        return (0, len);
+    }
+    let start = selected
+        .saturating_sub(VISIBLE_ROWS / 2)
+        .min(len - VISIBLE_ROWS);
+    (start, start + VISIBLE_ROWS)
+}
+
+fn items(device: &device::Device, screen: Screen, cheat_list: &CheatList) -> Vec<Item> {
     match screen {
         Screen::Main => vec![
             Item::Resume,
@@ -150,12 +273,23 @@ fn items(device: &device::Device, screen: Screen) -> Vec<Item> {
             Item::LoadState,
             Item::StateSlot,
             Item::Controllers,
+            Item::Cheats,
             Item::FastForward,
             Item::Fullscreen,
             Item::Shader,
             Item::Reset,
             Item::Quit,
         ],
+        Screen::Cheats => {
+            if cheat_list.names.is_empty() {
+                vec![Item::NoCheats, Item::Back]
+            } else {
+                let mut items = vec![Item::CheatsMaster];
+                items.extend((0..cheat_list.names.len()).map(Item::Cheat));
+                items.push(Item::Back);
+                items
+            }
+        }
         Screen::Controllers => {
             let mut items = vec![];
             for port in active_ports(device) {
@@ -167,7 +301,12 @@ fn items(device: &device::Device, screen: Screen) -> Vec<Item> {
     }
 }
 
-fn label(device: &device::Device, item: Item, fast_forward: bool) -> String {
+fn label(
+    device: &device::Device,
+    item: Item,
+    fast_forward: bool,
+    cheat_list: &CheatList,
+) -> String {
     let slot = device.ui.storage.save_state_slot;
     match item {
         Item::Resume => "Resume".to_string(),
@@ -175,6 +314,7 @@ fn label(device: &device::Device, item: Item, fast_forward: bool) -> String {
         Item::LoadState => format!("Load state (slot {slot})"),
         Item::StateSlot => format!("State slot: {slot}"),
         Item::Controllers => "Controllers...".to_string(),
+        Item::Cheats => "Cheats...".to_string(),
         Item::FastForward => format!("Fast forward: {}", on_off(fast_forward)),
         Item::Fullscreen => format!("Fullscreen: {}", on_off(ui::video::is_fullscreen())),
         Item::Shader => format!("Shader: {}", shader_name(device)),
@@ -200,6 +340,15 @@ fn label(device: &device::Device, item: Item, fast_forward: bool) -> String {
         ),
         Item::Rumble => format!("Rumble: {}", on_off(device.ui.config.input.rumble)),
         Item::Back => "Back".to_string(),
+        Item::CheatsMaster => {
+            if device.cheats.cheats.is_empty() {
+                "Cheats: none switched on".to_string()
+            } else {
+                format!("Cheats: {}", on_off(device.cheats.enabled))
+            }
+        }
+        Item::Cheat(index) => cheat_list.label(index),
+        Item::NoCheats => "No cheats known for this game".to_string(),
     }
 }
 
@@ -260,32 +409,58 @@ pub fn run(device: &mut device::Device) {
     }
 
     let mut screen = Screen::Main;
-    let mut selected = [0usize; 2]; // per screen, so that coming back finds its place
+    let mut selected = [0usize; 3]; // per screen, so that coming back finds its place
     let mut fast_forward = !device.speed_limiter.enabled;
-    let mut shown: Option<(Screen, Vec<String>, usize)> = None;
+    let mut cheat_list = CheatList::default();
+    let mut shown: Option<(String, Vec<String>, usize, String)> = None;
     // Whatever is held as the menu opens does nothing until it has been let go
     let mut previous = Buttons::ALL;
 
     loop {
-        let items = items(device, screen);
+        let items = items(device, screen, &cheat_list);
         let current = &mut selected[screen as usize];
         *current = (*current).min(items.len() - 1);
 
         let labels: Vec<String> = items
             .iter()
-            .map(|item| label(device, *item, fast_forward))
+            .map(|item| label(device, *item, fast_forward, &cheat_list))
             .collect();
-        if shown.as_ref() != Some(&(screen, labels.clone(), *current)) {
-            ui::video::show_menu(
-                match screen {
-                    Screen::Main => "Paused",
-                    Screen::Controllers => "Controllers",
-                },
-                &labels,
-                *current,
-                "Up/Down: move    A or Enter: choose    Left/Right: change    B: back    Esc: close",
-            );
-            shown = Some((screen, labels, *current));
+        // a long list shows a window of itself, with the place in it in the title
+        let (first, last) = visible_window(items.len(), *current);
+        let title = match screen {
+            Screen::Main => "Paused",
+            Screen::Controllers => "Controllers",
+            Screen::Cheats => "Cheats",
+        };
+        let place = match (screen, items[*current]) {
+            // on the cheats screen only the cheats count, not the rows around them
+            (Screen::Cheats, Item::Cheat(index)) => Some((index + 1, cheat_list.names.len())),
+            (Screen::Cheats, _) => None,
+            _ => Some((*current + 1, items.len())),
+        };
+        let title = match place {
+            Some((number, total)) if items.len() > VISIBLE_ROWS => {
+                format!("{title}   {number}/{total}")
+            }
+            _ => title.to_string(),
+        };
+        // under a cheat goes what the database says about it
+        let hint = match items[*current] {
+            Item::Cheat(index) => {
+                let note = &cheat_list.available[&cheat_list.names[index]].note;
+                let note = note.split_whitespace().collect::<Vec<_>>().join(" ");
+                if note.is_empty() {
+                    CONTROLS_HINT.to_string()
+                } else {
+                    shorten(&note, 72)
+                }
+            }
+            _ => CONTROLS_HINT.to_string(),
+        };
+        let view = (title, labels[first..last].to_vec(), *current - first, hint);
+        if shown.as_ref() != Some(&view) {
+            ui::video::show_menu(&view.0, &view.1, view.2, &view.3);
+            shown = Some(view);
         }
         frame();
 
@@ -344,6 +519,23 @@ pub fn run(device: &mut device::Device) {
             Item::Rumble if changed => {
                 device.ui.config.input.rumble = !device.ui.config.input.rumble;
             }
+            Item::CheatsMaster if changed => {
+                // with nothing switched on there is nothing to turn on
+                if !device.cheats.cheats.is_empty() {
+                    device.cheats.enabled = !device.cheats.enabled;
+                }
+            }
+            Item::Cheat(index) if changed => {
+                let pick_option = if pressed.left {
+                    Some(false)
+                } else if pressed.right {
+                    Some(true)
+                } else {
+                    None
+                };
+                cheat_list.change(index, pick_option);
+                cheat_list.save_and_apply(device);
+            }
             _ if pressed.accept => match item {
                 Item::Resume => break,
                 Item::SaveState => {
@@ -355,6 +547,12 @@ pub fn run(device: &mut device::Device) {
                     break;
                 }
                 Item::Controllers => screen = Screen::Controllers,
+                Item::Cheats => {
+                    if !cheat_list.loaded {
+                        cheat_list = CheatList::load(device);
+                    }
+                    screen = Screen::Cheats;
+                }
                 Item::Back => screen = Screen::Main,
                 Item::Pak(port) => {
                     // the new pak goes in half a second into the game, with a message
@@ -374,9 +572,15 @@ pub fn run(device: &mut device::Device) {
                     ui::input::push_user_event(ui::input::USER_EVENT_EXIT_GAME);
                     break;
                 }
-                // changed above
-                Item::StateSlot | Item::Shader | Item::Pad(_) | Item::Profile(_) | Item::Rumble => {
-                }
+                // changed above, or nothing to do
+                Item::StateSlot
+                | Item::Shader
+                | Item::Pad(_)
+                | Item::Profile(_)
+                | Item::Rumble
+                | Item::CheatsMaster
+                | Item::Cheat(_)
+                | Item::NoCheats => {}
             },
             _ => {}
         }
