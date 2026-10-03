@@ -1,0 +1,26 @@
+# Advisories that the daily security audit (.github/workflows/sec.yml) leaves out of its report,
+# with the reason for each. Every one is either in code VibeN64 only reaches through netplay,
+# which is switched off unless NETPLAY_SERVER_URL is set, or in a platform VibeN64 does not ship
+# for. None is a known vulnerability: they are all "unmaintained" notices.
+#
+# Not listed on purpose: RUSTSEC-2026-0098, -0099 and -0104 (rustls-webpki 0.101.7). Those are
+# real vulnerabilities, in the same netplay code, and stay reported until the dependency moves.
+# See the open issues for what is and is not reachable.
+#
+# Revisit this list when matchbox_socket or ggrs release a version that drops these crates.
+
+[advisories]
+ignore = [
+    # rustls-pemfile and async-std, through matchbox_socket 0.14.0 -> async-tungstenite 0.32
+    # -> async-tls 0.13 (netplay signalling over TLS)
+    "RUSTSEC-2025-0134",
+    "RUSTSEC-2025-0052",
+
+    # bincode and instant, through ggrs 0.13.0 (netplay rollback). The second bincode in the
+    # lock file (2.0.1, from typed-index-collections) is not built in any configuration.
+    "RUSTSEC-2025-0141",
+    "RUSTSEC-2024-0384",
+
+    # ttf-parser, through winit's Wayland window decorations (sctk-adwaita): Linux only
+    "RUSTSEC-2026-0192",
+]
