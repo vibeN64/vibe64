@@ -22,7 +22,7 @@ typedef struct {
   bool integer_scaling;
   uint32_t upscale;
   bool ssaa;
-  bool crt;
+  uint32_t shader; // index into the display shaders, see rdp_shader_count
 } GFX_INFO;
 
 typedef struct {
@@ -70,6 +70,12 @@ void rdp_load_state(GFX_INFO _gfx_info, const uint8_t *state);
 void rdp_set_fps(uint32_t fps, uint32_t vis);
 
 JoystickEvent get_joystick_event();
+
+// The display shaders: how the finished picture is drawn to the window
+uint32_t rdp_shader_count();
+const char *rdp_shader_id(uint32_t index);   // what the config file stores
+const char *rdp_shader_name(uint32_t index); // what the user sees
+void rdp_set_shader(uint32_t index);
 
 // The in-game menu (see src/ui/menu.rs, which owns what it shows and does)
 void rdp_menu_show(const char *title, const char *const *items, uint32_t count,

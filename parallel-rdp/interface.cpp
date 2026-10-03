@@ -3,6 +3,7 @@
 #include "rdp_device.hpp"
 #include "spirv.hpp"
 #include "spirv_crt.hpp"
+#include "spirv_shaders.hpp"
 #include "wsi.hpp"
 #include "wsi_platform.hpp"
 #include <SDL3/SDL_vulkan.h>
@@ -115,8 +116,51 @@ static RDP_DEVICE rdp_device;
 static bool crop_letterbox;
 static CALL_BACK callback;
 static GFX_INFO gfx_info;
-static const uint32_t *fragment_spirv;
-static size_t fragment_size;
+
+// The ways the finished picture can be drawn to the window. They share one vertex
+// shader (a triangle that covers the window). A shader that takes the push constants
+// is given the size of the picture and of the area it is drawn to.
+typedef struct {
+  const char *id;
+  const char *name;
+  const uint32_t *spirv;
+  size_t size;
+  bool linear; // sample the picture with a linear filter instead of nearest
+  bool push;
+} DisplayShader;
+
+static const DisplayShader display_shaders[] = {
+    {"sharp", "Sharp", plain_fragment_spirv, sizeof(plain_fragment_spirv),
+     false, false},
+    {"smooth", "Smooth", plain_fragment_spirv, sizeof(plain_fragment_spirv),
+     true, false},
+    {"sharp-bilinear", "Sharp bilinear", sharp_bilinear_fragment_spirv,
+     sizeof(sharp_bilinear_fragment_spirv), true, true},
+    {"scanlines", "Scanlines", scanlines_fragment_spirv,
+     sizeof(scanlines_fragment_spirv), true, true},
+    {"crt-aperture", "CRT Aperture", crt_fragment_spirv,
+     sizeof(crt_fragment_spirv), false, true},
+    {"crt-geom", "CRT Geom", crt_geom_fragment_spirv,
+     sizeof(crt_geom_fragment_spirv), false, true},
+    {"lcd-grid", "LCD grid", lcd_grid_fragment_spirv,
+     sizeof(lcd_grid_fragment_spirv), false, true},
+};
+static const uint32_t display_shader_count =
+    sizeof(display_shaders) / sizeof(display_shaders[0]);
+
+uint32_t rdp_shader_count() { return display_shader_count; }
+
+const char *rdp_shader_id(uint32_t index) {
+  return index < display_shader_count ? display_shaders[index].id : "";
+}
+
+const char *rdp_shader_name(uint32_t index) {
+  return index < display_shader_count ? display_shaders[index].name : "";
+}
+
+void rdp_set_shader(uint32_t index) {
+  gfx_info.shader = index < display_shader_count ? index : 0;
+}
 
 static std::vector<bool> rdram_dirty;
 static uint64_t sync_signal;
@@ -537,13 +581,7 @@ void rdp_init(void *_window, GFX_INFO _gfx_info, const void *font,
 
   gfx_info = _gfx_info;
 
-  if (gfx_info.crt) {
-    fragment_spirv = crt_fragment_spirv;
-    fragment_size = sizeof(crt_fragment_spirv);
-  } else {
-    fragment_spirv = plain_fragment_spirv;
-    fragment_size = sizeof(plain_fragment_spirv);
-  }
+  rdp_set_shader(gfx_info.shader);
 
   wsi = new WSI;
   wsi_platform = new SDL_WSIPlatform;
@@ -777,13 +815,14 @@ static void render_frame(Vulkan::Device &device) {
   Vulkan::ResourceLayout fragment_layout = {};
   fragment_layout.output_mask = 1 << 0;
   fragment_layout.sets[0].sampled_image_mask = 1 << 0;
-  if (gfx_info.crt)
+  const DisplayShader &shader = display_shaders[gfx_info.shader];
+  if (shader.push)
     fragment_layout.push_constant_size = sizeof(Push);
 
   // This request is cached.
   auto *program =
-      device.request_program(vertex_spirv, sizeof(vertex_spirv), fragment_spirv,
-                             fragment_size, &vertex_layout, &fragment_layout);
+      device.request_program(vertex_spirv, sizeof(vertex_spirv), shader.spirv,
+                             shader.size, &vertex_layout, &fragment_layout);
 
   // Blit image on screen.
   auto cmd = device.request_command_buffer();
@@ -807,7 +846,7 @@ static void render_frame(Vulkan::Device &device) {
       calculate_viewport(&vp.x, &vp.y, &vp.width, &vp.height,
                          image->get_height() / gfx_info.upscale);
 
-      if (gfx_info.crt) {
+      if (shader.push) {
         // Set shader parameters
         Push push = {
             {float(image->get_width()), float(image->get_height()),
@@ -819,7 +858,8 @@ static void render_frame(Vulkan::Device &device) {
       }
 
       cmd->set_texture(0, 0, image->get_view(),
-                       Vulkan::StockSampler::NearestClamp);
+                       shader.linear ? Vulkan::StockSampler::LinearClamp
+                                     : Vulkan::StockSampler::NearestClamp);
       cmd->set_viewport(vp);
       // The vertices are constants in the shader.
       // Draws fullscreen quad using oversized triangle.

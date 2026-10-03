@@ -180,7 +180,15 @@ fn settings_window(app: &AppWindow, config: &ui::config::Config) {
     app.set_fullscreen(config.video.fullscreen);
     app.set_widescreen(config.video.widescreen);
     app.set_vsync(config.video.vsync);
-    app.set_apply_crt_shader(config.video.crt);
+    app.set_shader_names(slint::ModelRc::from(std::rc::Rc::new(
+        slint::VecModel::from(
+            ui::video::shaders()
+                .into_iter()
+                .map(|(_, name)| name.into())
+                .collect::<Vec<slint::SharedString>>(),
+        ),
+    )));
+    app.set_shader(ui::video::shader_index(&config.video.shader) as i32);
     app.set_theme(config.ui.theme);
     app.set_overclock_n64_cpu(config.emulation.overclock);
     app.set_disable_expansion_pak(config.emulation.disable_expansion_pak);
@@ -470,10 +478,10 @@ fn controller_window(app: &AppWindow, config: &ui::config::Config) {
     });
 }
 
-/// A game can change some controller settings from its in-game menu (the input profile of
-/// each player, rumble). Show what it saved, so that the launcher does not write its old
-/// values back over them.
-fn refresh_controller_settings(handle: &AppWindow) {
+/// A game can change some settings from its in-game menu (the input profile of each
+/// player, rumble, the shader). Show what it saved, so that the launcher does not write
+/// its old values back over them.
+fn refresh_settings(handle: &AppWindow) {
     let config = ui::config::Config::new();
     let profiles = input_profiles(&config);
     let bindings = slint::VecModel::default();
@@ -487,6 +495,7 @@ fn refresh_controller_settings(handle: &AppWindow) {
     }
     handle.set_selected_profile_binding(slint::ModelRc::from(std::rc::Rc::new(bindings)));
     handle.set_rumble_enabled(config.input.rumble);
+    handle.set_shader(ui::video::shader_index(&config.video.shader) as i32);
 }
 
 pub fn save_settings(app: &AppWindow) {
@@ -497,7 +506,9 @@ pub fn save_settings(app: &AppWindow) {
     config.video.fullscreen = app.get_fullscreen();
     config.video.widescreen = app.get_widescreen();
     config.video.vsync = app.get_vsync();
-    config.video.crt = app.get_apply_crt_shader();
+    if let Some((id, _)) = ui::video::shaders().get(app.get_shader() as usize) {
+        config.video.shader = id.clone();
+    }
     config.ui.theme = app.get_theme();
     config.emulation.overclock = app.get_overclock_n64_cpu();
     config.emulation.disable_expansion_pak = app.get_disable_expansion_pak();
@@ -698,7 +709,7 @@ pub fn run_rom(
             if success {
                 update_recent_roms(&handle, file_path);
             }
-            refresh_controller_settings(&handle);
+            refresh_settings(&handle);
             handle.set_game_running(false);
         })
         .unwrap();

@@ -11,7 +11,8 @@ export global SettingsData {
     in-out property <bool> fullscreen;
     in-out property <bool> widescreen;
     in-out property <bool> vsync;
-    in-out property <bool> apply_crt_shader;
+    in-out property <[string]> shader_names;
+    in-out property <int> shader;
     in-out property <bool> overclock_n64_cpu;
     in-out property <bool> disable_expansion_pak;
     in-out property <int> resolution;
@@ -100,12 +101,14 @@ export component Settings inherits Page {
         }
 
         SettingRow {
-            label: @tr("Apply CRT shader");
+            label: @tr("Shader");
+            hint: @tr("How the picture is drawn: sharp or smooth pixels, or CRT, scanline and LCD looks. The CRT, scanline and LCD ones are made for the 1x resolution. Can also be changed while a game is running, from its menu.");
 
-            VSwitch {
-                checked: SettingsData.apply_crt_shader;
-                toggled => {
-                    SettingsData.apply_crt_shader = self.checked;
+            ComboBox {
+                model: SettingsData.shader_names;
+                current-index: SettingsData.shader;
+                selected => {
+                    SettingsData.shader = self.current-index;
                 }
             }
         }

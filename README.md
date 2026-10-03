@@ -43,9 +43,15 @@ Keys are mapped according to [these defaults](https://github.com/gopher64/gopher
 
 ### in-game menu
 
-**Esc**, or the hotkey button plus Start on a controller, pauses the game and opens a menu: resume, save and load state, state slot, controllers, fast forward, fullscreen, reset and quit. The Controllers screen has, for each player, the pad they use, their input profile and their pak (Memory Pak, Rumble Pak, Transfer Pak), and a rumble switch. Pad and profile choices are saved. Move with the d-pad, stick or arrow keys, choose with A or Enter, go back with B and close the menu with Esc. It works the same in fullscreen, so a fullscreen game no longer needs the keyboard to leave. It is not available in netplay or in RetroAchievements hardcore mode, where pausing is not allowed; there Esc still leaves a fullscreen game.
+**Esc**, or the hotkey button plus Start on a controller, pauses the game and opens a menu: resume, save and load state, state slot, controllers, fast forward, fullscreen, shader, reset and quit. The Controllers screen has, for each player, the pad they use, their input profile and their pak (Memory Pak, Rumble Pak, Transfer Pak), and a rumble switch. Pad and profile choices are saved. Move with the d-pad, stick or arrow keys, choose with A or Enter, go back with B and close the menu with Esc. It works the same in fullscreen, so a fullscreen game no longer needs the keyboard to leave. It is not available in netplay or in RetroAchievements hardcore mode, where pausing is not allowed; there Esc still leaves a fullscreen game.
 
 The hotkey button is Capture on a Nintendo Switch Online N64 controller. With the hotkey held, L saves a state, R loads one, Z toggles fast forward and C-Left rewinds.
+
+## shaders
+
+The picture can be drawn in several ways, chosen under Settings or while a game is running from its menu (Shader): **Sharp** (the default), **Smooth**, **Sharp bilinear** (crisp pixels without uneven widths at odd scales), **Scanlines**, **CRT Aperture**, **CRT Geom** (a curved screen with scanlines and a dot mask, ported from the copy that ships with OpenEmu) and **LCD grid**. The CRT, scanline and LCD looks are made for the 1x internal resolution and fade out at higher ones. They are built into the app; there is no support for loading RetroArch shader presets, and the multi-pass ones (CRT Royale, NTSC and so on) are not included.
+
+To change or add a shader, edit the `.frag` files in `data/shader`, then run `data/shader/output.sh` (needs `glslc`, from `brew install shaderc`) and commit the generated header in `parallel-rdp`. Building VibeN64 does not need `glslc`.
 
 ## portable mode
 

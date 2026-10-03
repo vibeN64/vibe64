@@ -30,8 +30,45 @@ fn build_gfx_info(device: &mut device::Device, netplay: bool) -> GFX_INFO {
         integer_scaling: device.ui.config.video.integer_scaling,
         upscale: device.ui.config.video.upscale,
         ssaa: device.ui.config.video.ssaa,
-        crt: device.ui.config.video.crt,
+        shader: shader_index(&device.ui.config.video.shader),
     }
+}
+
+/// The shader used when none has been chosen: the picture as it is, with sharp pixels
+pub const DEFAULT_SHADER: &str = "sharp";
+
+fn shader_string(ptr: *const std::ffi::c_char) -> String {
+    unsafe { std::ffi::CStr::from_ptr(ptr) }
+        .to_string_lossy()
+        .to_string()
+}
+
+/// The display shaders, as (id, name): the id goes in the config file, the name on screen
+pub fn shaders() -> Vec<(String, String)> {
+    (0..unsafe { rdp_shader_count() })
+        .map(|index| unsafe {
+            (
+                shader_string(rdp_shader_id(index)),
+                shader_string(rdp_shader_name(index)),
+            )
+        })
+        .collect()
+}
+
+/// The place of a shader in the list; one that is not known is the first
+pub fn shader_index(id: &str) -> u32 {
+    shaders()
+        .iter()
+        .position(|(shader_id, _)| shader_id == id)
+        .unwrap_or(0) as u32
+}
+
+/// Switches the shader while a game is running, and remembers the choice
+pub fn set_shader(device: &mut device::Device, index: usize) {
+    let shaders = shaders();
+    let (id, _) = &shaders[index % shaders.len()];
+    unsafe { rdp_set_shader((index % shaders.len()) as u32) };
+    device.ui.config.video.shader = id.clone();
 }
 
 pub fn init(device: &mut device::Device, netplay: bool) {
